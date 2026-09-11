@@ -17,6 +17,12 @@ const sessionSchema = new Schema(
     selectedMinutes: Number, // 60 / 120 / 180 for FIXED_DURATION; null for OPEN_HOUR
     pricingSnapshot: Schema.Types.Mixed, // rate rules frozen at start
     endReason: String, // time_completed / player_ended / staff_ended / insufficient_balance / refund
+    /**
+     * Game played in this session. Set at authorization or reported by the
+     * kiosk during play; the game leaderboard aggregates on it, so without it
+     * a "game" scope would just be the global board under another name.
+     */
+    game: { type: String, index: true },
     xpAwarded: { type: Number, default: 0 },
   },
   { timestamps: true }

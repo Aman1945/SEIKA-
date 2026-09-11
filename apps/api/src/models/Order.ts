@@ -15,8 +15,13 @@ const orderSchema = new Schema(
     playerId: { type: Types.ObjectId, ref: "Player", required: true, index: true },
     zoneId: { type: Types.ObjectId, ref: "Zone", required: true, index: true },
     branchId: { type: Types.ObjectId, ref: "Branch" },
-    sessionId: { type: Types.ObjectId, ref: "Session" },
-    pcId: { type: Types.ObjectId, ref: "PC" },
+    /**
+     * Seat binding. Required: every seat order must be traceable to the live
+     * session and PC it was placed from (testing plan H4/H5), which is also
+     * what makes wrong-zone ordering impossible.
+     */
+    sessionId: { type: Types.ObjectId, ref: "Session", required: true, index: true },
+    pcId: { type: Types.ObjectId, ref: "PC", required: true, index: true },
     items: [
       {
         productId: { type: Types.ObjectId, ref: "Product", required: true },

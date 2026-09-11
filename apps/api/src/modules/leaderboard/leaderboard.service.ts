@@ -51,14 +51,19 @@ export async function getLeaderboard(params: {
   region?: string;
   country?: string;
   city?: string;
+  game?: string;
   period: Period;
   limit?: number;
 }): Promise<LeaderboardRow[]> {
   const limit = Math.min(params.limit ?? 20, 100);
 
-  // Geography scopes rank players by their lifetime XP snapshot.
-  // (Period-bounded geo boards are a future enhancement.)
-  if (["global", "region", "country", "city"].includes(params.scope)) {
+  // Geography scopes rank players by their lifetime XP snapshot, so they are
+  // only meaningful all-time; a period-bounded geo board falls through to the
+  // session aggregation below, which can honour the window.
+  const geoSnapshot =
+    ["global", "region", "country", "city"].includes(params.scope) && params.period === "all-time";
+
+  if (geoSnapshot) {
     const geo: Record<string, unknown> = {};
     if (params.scope === "country" && params.country) geo.country = params.country;
     if (params.scope === "city" && params.city) geo.city = params.city;
@@ -74,22 +79,38 @@ export async function getLeaderboard(params: {
     }));
   }
 
-  // Zone (and game, once sessions carry game) → session-XP aggregation with period.
+  // Zone, game, and period-bounded geo boards all aggregate completed-session
+  // XP inside the window.
   const match: Record<string, unknown> = { status: "COMPLETED" };
   if (params.scope === "zone") {
     if (!params.zoneId) return [];
     match.zoneId = new mongoose.Types.ObjectId(params.zoneId);
   }
+  if (params.scope === "game") {
+    // A game board without a game would silently be the global board.
+    if (!params.game) return [];
+    match.game = params.game;
+  }
   const start = windowStart(params.period);
   if (start) match.endTime = { $gte: start };
+
+  // Period-bounded geo scopes filter on the player's own geography after the
+  // join, so "top players in Pune this week" is a real answer.
+  const geoMatch: Record<string, unknown> = {};
+  if (params.scope === "country" && params.country) geoMatch["p.country"] = params.country;
+  if (params.scope === "city" && params.city) geoMatch["p.city"] = params.city;
+  if (params.scope === "region") {
+    geoMatch["p.country"] = { $in: countriesInRegion(params.region) };
+  }
 
   const rows = await Session.aggregate([
     { $match: match },
     { $group: { _id: "$playerId", xp: { $sum: "$xpAwarded" } } },
-    { $sort: { xp: -1 } },
-    { $limit: limit },
     { $lookup: { from: "players", localField: "_id", foreignField: "_id", as: "p" } },
     { $unwind: "$p" },
+    ...(Object.keys(geoMatch).length ? [{ $match: geoMatch }] : []),
+    { $sort: { xp: -1 } },
+    { $limit: limit },
   ]);
 
   return rows.map((r, i) => ({

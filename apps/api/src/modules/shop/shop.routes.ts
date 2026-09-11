@@ -9,7 +9,7 @@ import { Product } from "../../models/Product.js";
 import { Order } from "../../models/Order.js";
 import { Voucher } from "../../models/Voucher.js";
 import { PlayerPackage } from "../../models/PlayerPackage.js";
-import { placeOrder, updateOrderStatus, lowStock } from "./shop.service.js";
+import { placeOrder, updateOrderStatus, lowStock, resolveSeat } from "./shop.service.js";
 import { audit } from "../audit/audit.service.js";
 
 export const shopRouter = Router();
@@ -64,12 +64,27 @@ shopRouter.patch(
   })
 );
 
-/** List products for the current zone (players see active catalog). */
+/**
+ * Catalogue for the current zone.
+ *
+ * Staff see their own tenant's products. A seated player sees the catalogue of
+ * the zone they are actually seated in — the zone comes from their live session,
+ * so asking for another zone's shop is refused rather than served (plan H3/H8).
+ */
 shopRouter.get(
   "/products",
   asyncHandler(async (req, res) => {
-    const zoneId =
-      req.auth!.typ === "staff" ? req.tenantZoneId : (req.query.zoneId as string);
+    let zoneId: string | undefined;
+    if (req.auth!.typ === "staff") {
+      zoneId = req.tenantZoneId;
+    } else {
+      const seat = await resolveSeat(req.auth!.sub);
+      const claimed = req.query.zoneId as string | undefined;
+      if (claimed && claimed !== seat.zoneId) {
+        throw forbidden("You can only browse the shop of the zone you are seated in");
+      }
+      zoneId = seat.zoneId;
+    }
     if (!zoneId) throw badRequest("zoneId required");
     const filter: Record<string, unknown> = { zoneId };
     if (req.auth!.typ === "player") filter.active = true;
@@ -140,16 +155,30 @@ shopRouter.post(
     if (req.auth!.typ !== "player") throw forbidden("Players only");
     const body = z
       .object({
-        zoneId: z.string(),
+        // The seat (zone + PC + session) comes from the player's live session,
+        // so these are only ever treated as a claim to be checked.
+        zoneId: z.string().optional(),
         items: z.array(z.object({ productId: z.string(), qty: z.number().int().positive() })).min(1),
         paymentSource: z.enum(["WALLET", "CASH", "SESSION_BILL"]).default("WALLET"),
-        sessionId: z.string().optional(),
-        pcId: z.string().optional(),
       })
       .safeParse(req.body);
     if (!body.success) throw badRequest("Invalid body", body.error.flatten());
-    const result = await placeOrder({ ...body.data, playerId: req.auth!.sub, actorId: req.auth!.sub });
-    res.status(201).json({ ok: true, orderId: String(result.order._id), total: result.total, status: result.order.status });
+    const result = await placeOrder({
+      items: body.data.items,
+      paymentSource: body.data.paymentSource,
+      claimedZoneId: body.data.zoneId,
+      playerId: req.auth!.sub,
+      actorId: req.auth!.sub,
+    });
+    res.status(201).json({
+      ok: true,
+      orderId: String(result.order._id),
+      total: result.total,
+      status: result.order.status,
+      zoneId: String(result.order.zoneId),
+      pcId: String(result.order.pcId),
+      sessionId: String(result.order.sessionId),
+    });
   })
 );
 

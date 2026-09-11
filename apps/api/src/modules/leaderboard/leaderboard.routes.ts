@@ -23,6 +23,7 @@ leaderboardRouter.get(
         region: z.string().optional(),
         country: z.string().optional(),
         city: z.string().optional(),
+        game: z.string().optional(),
         limit: z.coerce.number().min(1).max(100).default(20),
       })
       .parse(req.query);

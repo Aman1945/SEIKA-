@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import { Product } from "../../models/Product.js";
 import { Order } from "../../models/Order.js";
-import { badRequest, conflict, notFound } from "../../common/errors.js";
+import { badRequest, conflict, forbidden, notFound } from "../../common/errors.js";
 import { withTransaction } from "../../config/db.js";
 import { addWalletEntry, getWalletBalance } from "../wallet/wallet.service.js";
 import { emitToZone } from "../realtime/io.js";
@@ -13,22 +13,63 @@ export interface OrderItemInput {
 }
 
 /**
+ * Resolves the seat a player is ordering from.
+ *
+ * The zone, PC and session are taken from the player's own live session — never
+ * from the request body — so "order only from the zone you are seated in"
+ * (testing plan H4/H5/H8) is enforced by construction rather than by trusting
+ * a client-supplied zoneId.
+ */
+export async function resolveSeat(playerId: string): Promise<{
+  sessionId: string;
+  zoneId: string;
+  pcId: string;
+}> {
+  const { Session } = await import("../../models/Session.js");
+  const session = await Session.findOne({
+    playerId,
+    status: { $in: ["AUTHORIZED", "ACTIVE", "PAUSED", "LOW_BALANCE"] },
+  })
+    .sort({ createdAt: -1 })
+    .select("_id zoneId pcId");
+
+  if (!session) {
+    throw badRequest("No active session — the seated-zone shop needs a live session");
+  }
+  return {
+    sessionId: String(session._id),
+    zoneId: String(session.zoneId),
+    pcId: String(session.pcId),
+  };
+}
+
+/**
  * Place a seat/shop order. Prices are resolved server-side (never trusted from
  * the client). Stock decrement + wallet deduction commit together in one txn.
+ *
+ * The order is bound to the player's active session, its PC and its zone.
  */
 export async function placeOrder(params: {
   playerId: string;
-  zoneId: string;
   items: OrderItemInput[];
   paymentSource: "WALLET" | "CASH" | "SESSION_BILL";
-  sessionId?: string;
-  pcId?: string;
   actorId: string;
+  /** When the caller already knows the seat (staff flows); otherwise resolved. */
+  seat?: { sessionId: string; zoneId: string; pcId: string };
+  /** Zone the client *claims* to be ordering from; rejected if it disagrees. */
+  claimedZoneId?: string;
 }) {
   if (!params.items.length) throw badRequest("No items");
 
+  const seat = params.seat ?? (await resolveSeat(params.playerId));
+  // A client asking for another zone's shop is refused outright rather than
+  // quietly served its own catalogue, so the mistake surfaces.
+  if (params.claimedZoneId && params.claimedZoneId !== seat.zoneId) {
+    throw forbidden("You can only order from the zone you are seated in");
+  }
+
   const ids = params.items.map((i) => new mongoose.Types.ObjectId(i.productId));
-  const products = await Product.find({ _id: { $in: ids }, zoneId: params.zoneId, active: true });
+  const products = await Product.find({ _id: { $in: ids }, zoneId: seat.zoneId, active: true });
   const byId = new Map(products.map((p) => [String(p._id), p]));
 
   // Resolve line items + total server-side; validate stock.
@@ -53,12 +94,12 @@ export async function placeOrder(params: {
     }
 
     if (params.paymentSource === "WALLET") {
-      const balance = await getWalletBalance(params.playerId, params.zoneId);
+      const balance = await getWalletBalance(params.playerId, seat.zoneId);
       if (balance < total) throw badRequest(`Insufficient balance (need ₹${total}, have ₹${balance})`);
       await addWalletEntry(
         {
           playerId: params.playerId,
-          zoneId: params.zoneId,
+          zoneId: seat.zoneId,
           amount: -total,
           type: "SHOP",
           method: "WALLET",
@@ -73,9 +114,9 @@ export async function placeOrder(params: {
       [
         {
           playerId: params.playerId,
-          zoneId: params.zoneId,
-          sessionId: params.sessionId,
-          pcId: params.pcId,
+          zoneId: seat.zoneId,
+          sessionId: seat.sessionId,
+          pcId: seat.pcId,
           items: lines.map((l) => ({
             productId: l.product._id,
             name: l.product.name,
@@ -92,11 +133,12 @@ export async function placeOrder(params: {
     return created;
   });
 
-  emitToZone(params.zoneId, "order:new", {
+  emitToZone(seat.zoneId, "order:new", {
     orderId: String(order._id),
     total,
     items: order.items.length,
-    pcId: params.pcId,
+    pcId: seat.pcId,
+    sessionId: seat.sessionId,
   });
   return { order, total };
 }

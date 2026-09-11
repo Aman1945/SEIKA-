@@ -25,6 +25,7 @@ export interface AuthorizeResult {
   minStartAmount?: number;
   balance?: number;
   sessionMode?: "FIXED_DURATION" | "OPEN_HOUR";
+  game?: string;
 }
 
 /**
@@ -39,6 +40,7 @@ export async function authorizeSession(
     voucherCode?: string;
     sessionMode?: "FIXED_DURATION" | "OPEN_HOUR";
     selectedMinutes?: number;
+    game?: string;
   } = {}
 ): Promise<AuthorizeResult> {
   const session = await Session.findById(sessionId);
@@ -126,6 +128,16 @@ export async function authorizeSession(
       if (!pkg) return { authorized: false, reason: "NO_ACTIVE_PACKAGE" };
       break;
     }
+  }
+
+  // Game is optional, but if named it must be one this PC actually offers —
+  // otherwise the per-game leaderboard fills up with games nobody can play.
+  if (ctx.game) {
+    const offered = (pc.games ?? []) as string[];
+    if (offered.length && !offered.includes(ctx.game)) {
+      throw badRequest(`PC ${pc.pcNumber} does not offer ${ctx.game}`);
+    }
+    session.game = ctx.game;
   }
 
   session.status = "AUTHORIZED";

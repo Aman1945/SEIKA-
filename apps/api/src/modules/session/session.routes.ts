@@ -46,12 +46,13 @@ sessionRouter.post(
 sessionRouter.post(
   "/:id/authorize",
   asyncHandler(async (req, res) => {
-    const { source, voucherCode, sessionMode, selectedMinutes } = z
+    const { source, voucherCode, sessionMode, selectedMinutes, game } = z
       .object({
         source: z.enum(["WALLET", "BOOKING", "CASH", "PACKAGE", "VOUCHER", "POSTPAID"]),
         voucherCode: z.string().optional(),
         sessionMode: z.enum(["FIXED_DURATION", "OPEN_HOUR"]).optional(),
         selectedMinutes: z.number().int().optional(),
+        game: z.string().min(1).max(80).optional(),
       })
       .parse(req.body);
     const staffApproved = req.auth!.typ === "staff";
@@ -60,6 +61,7 @@ sessionRouter.post(
       voucherCode,
       sessionMode,
       selectedMinutes,
+      game,
     });
     if (!result.authorized) {
       res.status(402).json({ ok: false, ...result });
