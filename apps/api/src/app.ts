@@ -29,6 +29,7 @@ import { notificationRouter } from "./modules/notification/notification.routes.j
 import { auditRouter } from "./modules/audit/audit.routes.js";
 import { announcementRouter } from "./modules/announcement/announcement.routes.js";
 import { tournamentRouter } from "./modules/tournament/tournament.routes.js";
+import { crossZoneRouter } from "./modules/crosszone/crosszone.routes.js";
 import { migrationRouter } from "./modules/migration/migration.routes.js";
 import { devRouter } from "./modules/dev/dev.routes.js";
 
@@ -78,6 +79,7 @@ export function createApp() {
   app.use("/api/audit", auditRouter);
   app.use("/api/announcements", announcementRouter);
   app.use("/api/tournaments", tournamentRouter);
+  app.use("/api/crosszone", crossZoneRouter);
   app.use("/api/migration", migrationRouter);
   if (!env.isProd) app.use("/api/dev", devRouter);
 

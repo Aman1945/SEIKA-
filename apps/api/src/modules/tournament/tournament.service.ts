@@ -30,7 +30,10 @@ export async function register(tournamentId: string, playerId: string) {
       );
     }
     try {
-      const [reg] = await TournamentRegistration.create([{ tournamentId, playerId, paymentStatus }], { session: txn });
+      const [reg] = await TournamentRegistration.create(
+        [{ tournamentId, playerId, zoneId: String(t.zoneId), paymentStatus }],
+        { session: txn }
+      );
       return reg;
     } catch (e) {
       if ((e as { code?: number }).code === 11000) throw conflict("Already registered");
