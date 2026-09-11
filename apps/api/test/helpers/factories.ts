@@ -244,6 +244,24 @@ export async function startActiveSession(params: {
 }
 
 /**
+ * Backdates a document's `createdAt`, for date-range assertions.
+ *
+ * Goes through the raw driver collection on purpose: with `timestamps: true`
+ * mongoose treats `createdAt` as immutable and silently strips a `$set` on it,
+ * so a model-level update looks like it worked and changes nothing.
+ */
+export async function backdateCreatedAt(
+  model: { collection: { updateOne: (f: unknown, u: unknown) => Promise<unknown> } },
+  id: string,
+  daysAgo: number
+): Promise<void> {
+  await model.collection.updateOne(
+    { _id: new mongoose.Types.ObjectId(id) },
+    { $set: { createdAt: new Date(Date.now() - daysAgo * 86_400_000) } }
+  );
+}
+
+/**
  * Backdates an active session's start time so ending it yields a known number
  * of valid minutes — the only way to assert XP/billing without real waiting.
  */
