@@ -195,7 +195,17 @@ shopRouter.get(
       .lean();
     res.json({
       ok: true,
-      orders: orders.map((o) => ({ ...o, total: parseFloat(o.total.toString()) })),
+      // Decimal128 has to be converted on the way out — including the per-line
+      // prices, not just the total. A client doing `price * qty` on the raw
+      // Decimal object silently gets NaN.
+      orders: orders.map((o) => ({
+        ...o,
+        total: parseFloat(o.total.toString()),
+        items: (o.items ?? []).map((i) => ({
+          ...i,
+          price: i.price ? parseFloat(i.price.toString()) : 0,
+        })),
+      })),
     });
   })
 );

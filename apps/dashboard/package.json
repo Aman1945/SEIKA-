@@ -1,0 +1,27 @@
+{
+  "name": "@seika/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SEIKA owner/staff dashboard — desktop and mobile, one RBAC",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@seika/sdk": "workspace:*",
+    "@seika/types": "workspace:*",
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.6.2"
+  }
+}

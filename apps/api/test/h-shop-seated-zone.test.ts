@@ -156,6 +156,31 @@ describe("H. Shop/POS & seated-zone shop", () => {
     );
   });
 
+  it("H7b — the queue returns money as numbers, so a client can add it up", async () => {
+    const zone = await seedZone();
+    const cashier = await seedStaff(zone, "CASHIER");
+    const player = await seedPlayer({ balance: 500, zoneId: zone.zoneId });
+    const product = await seedProduct(zone, { name: "Cold Coffee", price: 80, stockQty: 10 });
+    await startActiveSession({ zone, playerToken: player.token });
+
+    await as(player.token)
+      .post("/api/shop/orders")
+      .send({ items: [{ productId: product.productId, qty: 2 }], paymentSource: "WALLET" });
+
+    const queue = await as(cashier.token).get("/api/shop/orders/queue");
+    const order = queue.body.orders[0];
+
+    // Decimal128 serialises as an object, and `price * qty` on it is NaN — so
+    // both the total and every line price must arrive as real numbers.
+    expect(typeof order.total).toBe("number");
+    expect(order.total).toBe(160);
+    for (const item of order.items) {
+      expect(typeof item.price).toBe("number");
+      expect(Number.isNaN(item.price)).toBe(false);
+    }
+    expect(order.items[0].price * order.items[0].qty).toBe(160);
+  });
+
   it("H8 — a player seated in zone A cannot order from zone B", async () => {
     const zoneA = await seedZone({ name: "Zone A" });
     const zoneB = await seedZone({ name: "Zone B" });

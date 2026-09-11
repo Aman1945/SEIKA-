@@ -2,10 +2,16 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "seika-api",
+      "name": "api",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@seika/api", "dev:mem"],
+      "runtimeArgs": ["dev:api:mem"],
       "port": 4000
+    },
+    {
+      "name": "dashboard",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@seika/dashboard", "dev"],
+      "port": 3000
     }
   ]
 }

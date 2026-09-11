@@ -2,7 +2,7 @@
   "name": "seika",
   "version": "0.1.0",
   "private": true,
-  "description": "SEIKA Gaming Zone OS — enterprise-grade gaming zone operating system",
+  "description": "SEIKA Gaming Zone OS \u2014 enterprise-grade gaming zone operating system",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -11,7 +11,10 @@
     "dev:api": "pnpm --filter @seika/api dev",
     "dev:api:mem": "pnpm --filter @seika/api dev:mem",
     "build": "pnpm -r build",
-    "lint": "pnpm -r lint"
+    "lint": "pnpm -r lint",
+    "dev:dashboard": "pnpm --filter @seika/dashboard dev",
+    "typecheck": "pnpm -r typecheck",
+    "test": "pnpm --filter @seika/api test"
   },
   "packageManager": "pnpm@11.10.0",
   "engines": {
