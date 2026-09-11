@@ -1,0 +1,1094 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SEIKA Gaming Zone OS — Build Handover</title>
+<style>
+  /* ─── Print setup ───────────────────────────────────────────────────────── */
+  @page {
+    size: A4;
+    margin: 16mm 15mm 18mm;
+    @bottom-right { content: counter(page); }
+  }
+  @page :first { margin: 0; }
+
+  :root {
+    --ink: #14181f;
+    --ink-soft: #4a5464;
+    --ink-faint: #7a8598;
+    --rule: #dfe4ec;
+    --rule-soft: #eef1f6;
+    --accent: #4a3aff;
+    --ok: #0d8a5f;
+    --warn: #b26a00;
+    --bad: #c62839;
+    --panel: #f6f8fc;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    color: var(--ink);
+    font: 10.2pt/1.55 -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  h1, h2, h3, h4 { line-height: 1.25; margin: 0; }
+
+  h2 {
+    font-size: 17pt;
+    letter-spacing: -0.3px;
+    margin: 0 0 3mm;
+    padding-bottom: 2mm;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  h3 {
+    font-size: 12pt;
+    margin: 7mm 0 2mm;
+  }
+
+  h4 {
+    font-size: 10.2pt;
+    margin: 5mm 0 1.5mm;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    font-size: 8.4pt;
+  }
+
+  p { margin: 0 0 2.6mm; }
+  ul, ol { margin: 0 0 3mm; padding-left: 5mm; }
+  li { margin-bottom: 1.2mm; }
+
+  a { color: var(--accent); text-decoration: none; }
+  code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 8.6pt; }
+  code { background: var(--rule-soft); padding: 0.5mm 1.2mm; border-radius: 2px; }
+
+  .lead { font-size: 11pt; color: var(--ink-soft); }
+  .muted { color: var(--ink-faint); }
+  .small { font-size: 8.6pt; }
+
+  /* A section starts on its own page. */
+  section { break-before: page; }
+  section.cont { break-before: auto; }
+
+  /* ─── Cover ─────────────────────────────────────────────────────────────── */
+  .cover {
+    break-after: page;
+    height: 297mm;
+    padding: 32mm 22mm;
+    background: linear-gradient(155deg, #0b0e16 0%, #1b1245 52%, #0d2b2c 100%);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cover__brand {
+    font-size: 44pt;
+    font-weight: 800;
+    letter-spacing: 10px;
+    background: linear-gradient(100deg, #33e1c4, #7c5cff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .cover__title {
+    font-size: 25pt;
+    font-weight: 700;
+    margin-top: 3mm;
+    line-height: 1.2;
+    max-width: 120mm;
+  }
+
+  .cover__sub {
+    font-size: 11.5pt;
+    color: #a9b6cd;
+    margin-top: 5mm;
+    max-width: 125mm;
+    line-height: 1.6;
+  }
+
+  .cover__stats {
+    margin-top: auto;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 5mm;
+    padding-top: 8mm;
+    border-top: 1px solid rgb(255 255 255 / 0.18);
+  }
+
+  .cover__stat-n {
+    font-size: 20pt;
+    font-weight: 800;
+    color: #33e1c4;
+    line-height: 1;
+  }
+
+  .cover__stat-l {
+    font-size: 8pt;
+    color: #a9b6cd;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 1.5mm;
+  }
+
+  .cover__meta {
+    margin-top: 7mm;
+    font-size: 8.6pt;
+    color: #7d8ba5;
+  }
+
+  /* ─── Tables ────────────────────────────────────────────────────────────── */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 9pt;
+    margin: 0 0 4mm;
+  }
+
+  th {
+    text-align: left;
+    font-size: 7.8pt;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    color: var(--ink-faint);
+    border-bottom: 1.5px solid var(--rule);
+    padding: 1.8mm 2mm;
+    font-weight: 700;
+  }
+
+  td {
+    padding: 1.8mm 2mm;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+
+  tr { break-inside: avoid; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+  /* ─── Blocks ────────────────────────────────────────────────────────────── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 3mm;
+    padding: 4mm 5mm;
+    margin: 0 0 4mm;
+    break-inside: avoid;
+  }
+
+  .panel h4 { margin-top: 0; }
+
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: #f3f2ff;
+    padding: 3mm 4mm;
+    margin: 0 0 4mm;
+    border-radius: 0 2mm 2mm 0;
+    break-inside: avoid;
+  }
+
+  .callout--warn { border-left-color: var(--warn); background: #fff6e8; }
+  .callout--bad { border-left-color: var(--bad); background: #fdeff1; }
+  .callout--ok { border-left-color: var(--ok); background: #ecf8f3; }
+
+  .tag {
+    display: inline-block;
+    font-size: 7.4pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 0.6mm 2mm;
+    border-radius: 999px;
+    border: 1px solid;
+    white-space: nowrap;
+  }
+  .tag--ok { color: var(--ok); border-color: #a9dcc6; background: #ecf8f3; }
+  .tag--warn { color: var(--warn); border-color: #eccc9a; background: #fff6e8; }
+  .tag--bad { color: var(--bad); border-color: #eeb2ba; background: #fdeff1; }
+  .tag--new { color: var(--accent); border-color: #c3bdff; background: #f3f2ff; }
+
+  /* ─── Screenshots ───────────────────────────────────────────────────────── */
+  figure { margin: 0 0 6mm; break-inside: avoid; }
+
+  figure img {
+    display: block;
+    width: 100%;
+    border: 1px solid var(--rule);
+    border-radius: 2.5mm;
+  }
+
+  figcaption {
+    font-size: 8.6pt;
+    color: var(--ink-soft);
+    margin-top: 2mm;
+    line-height: 1.5;
+  }
+
+  figcaption b { color: var(--ink); }
+
+  .phones {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5mm;
+    margin-bottom: 5mm;
+    break-inside: avoid;
+  }
+
+  .phones--2 { grid-template-columns: repeat(2, 1fr); }
+
+  .phones img {
+    width: 100%;
+    border: 1px solid var(--rule);
+    border-radius: 2.5mm;
+    display: block;
+  }
+
+  .phones figcaption { font-size: 8pt; }
+
+  .grid2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 5mm;
+  }
+
+  /* ─── Flow diagram ──────────────────────────────────────────────────────── */
+  .flow {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 0 0 4mm;
+  }
+
+  .flow__step {
+    display: flex;
+    gap: 4mm;
+    padding: 2.5mm 0;
+    border-bottom: 1px solid var(--rule-soft);
+    break-inside: avoid;
+  }
+
+  .flow__n {
+    flex: 0 0 7mm;
+    height: 7mm;
+    border-radius: 50%;
+    background: var(--ink);
+    color: #fff;
+    font-size: 8.4pt;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .flow__n[data-tone="lock"] { background: var(--bad); }
+  .flow__n[data-tone="open"] { background: var(--ok); }
+
+  .flow__body { flex: 1; }
+  .flow__title { font-weight: 600; font-size: 9.6pt; }
+  .flow__desc { font-size: 8.8pt; color: var(--ink-soft); }
+
+  .kv { display: grid; grid-template-columns: 34mm 1fr; gap: 1.5mm 4mm; font-size: 9pt; }
+  .kv dt { color: var(--ink-faint); }
+  .kv dd { margin: 0; }
+
+  .toc { font-size: 10pt; }
+  .toc__row {
+    display: flex;
+    align-items: baseline;
+    gap: 2mm;
+    padding: 1.6mm 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .toc__n { color: var(--ink-faint); width: 6mm; font-variant-numeric: tabular-nums; }
+  .toc__t { font-weight: 500; }
+  .toc__d { color: var(--ink-faint); font-size: 8.6pt; margin-left: auto; text-align: right; }
+</style>
+</head>
+<body>
+
+<!-- ─── Cover ──────────────────────────────────────────────────────────────── -->
+<div class="cover">
+  <div class="cover__brand">SEIKA</div>
+  <div class="cover__title">Gaming Zone OS<br />Build Handover</div>
+  <div class="cover__sub">
+    What was built against the Complete Software Testing Plan, how each part works,
+    and what is genuinely left before a pilot — with screenshots of the running product.
+  </div>
+
+  <div class="cover__stats">
+    <div>
+      <div class="cover__stat-n">167</div>
+      <div class="cover__stat-l">Automated tests</div>
+    </div>
+    <div>
+      <div class="cover__stat-n">14 / 14</div>
+      <div class="cover__stat-l">Plan modules built</div>
+    </div>
+    <div>
+      <div class="cover__stat-n">4</div>
+      <div class="cover__stat-l">Apps &amp; clients</div>
+    </div>
+    <div>
+      <div class="cover__stat-n">~85%</div>
+      <div class="cover__stat-l">Shippable</div>
+    </div>
+  </div>
+
+  <div class="cover__meta">
+    Indepesca / Ezzstar &middot; Prepared 11 September 2026 &middot; Measured against the
+    SEIKA Complete Software Testing Plan (26 August 2026)
+  </div>
+</div>
+
+<!-- ─── Contents + summary ─────────────────────────────────────────────────── -->
+<section class="cont">
+  <h2>1 &nbsp; Summary</h2>
+
+  <p class="lead">
+    The backend was strong and the reporting around it was not. Two client apps, all
+    QA automation and most of production infrastructure did not exist, while the
+    status documents put the product at 86%. That gap is now closed: everything the
+    testing plan asks for is built, and almost all of it is under automated test.
+  </p>
+
+  <div class="grid2">
+    <div class="panel">
+      <h4>Where it started</h4>
+      <table>
+        <tr><td>Backend API</td><td class="num">~85%</td></tr>
+        <tr><td>Automated tests</td><td class="num"><b>0</b></td></tr>
+        <tr><td>Owner dashboard</td><td class="num">~10%</td></tr>
+        <tr><td>Player app</td><td class="num">~10%</td></tr>
+        <tr><td>PC kiosk</td><td class="num">~15%</td></tr>
+        <tr><td>Production infra</td><td class="num">~20%</td></tr>
+        <tr><td><b>Shippable</b></td><td class="num"><b>~50%</b></td></tr>
+      </table>
+    </div>
+    <div class="panel">
+      <h4>Where it is now</h4>
+      <table>
+        <tr><td>Backend API</td><td class="num">~98%</td></tr>
+        <tr><td>Automated tests</td><td class="num"><b>167</b></td></tr>
+        <tr><td>Owner dashboard</td><td class="num">~80%</td></tr>
+        <tr><td>Player app</td><td class="num">~80%</td></tr>
+        <tr><td>PC kiosk</td><td class="num">~70%</td></tr>
+        <tr><td>Production infra</td><td class="num">~80%</td></tr>
+        <tr><td><b>Shippable</b></td><td class="num"><b>~85%</b></td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div class="callout callout--bad">
+    <b>The one blocker that matters.</b> The PC kiosk has never run on Windows. The
+    testing plan (§11) is explicit that kiosk behaviour must be tested on real Windows
+    hardware and not simulated through the API, so this cannot be signed off from a
+    Mac. It is the single largest remaining risk to a pilot and needs roughly a week
+    with two real PCs.
+  </div>
+
+  <h3>What is in this document</h3>
+  <div class="toc">
+    <div class="toc__row"><span class="toc__n">2</span><span class="toc__t">What the audit found</span><span class="toc__d">the gap between the docs and the code</span></div>
+    <div class="toc__row"><span class="toc__n">3</span><span class="toc__t">How the product works</span><span class="toc__d">the core loop and the rules it protects</span></div>
+    <div class="toc__row"><span class="toc__n">4</span><span class="toc__t">The owner console</span><span class="toc__d">screens, desktop and phone</span></div>
+    <div class="toc__row"><span class="toc__n">5</span><span class="toc__t">The player app</span><span class="toc__d">screens, and the loop from a player's side</span></div>
+    <div class="toc__row"><span class="toc__n">6</span><span class="toc__t">What was built</span><span class="toc__d">module by module against the plan</span></div>
+    <div class="toc__row"><span class="toc__n">7</span><span class="toc__t">Bugs the work found</span><span class="toc__d">eleven, in code recorded as verified</span></div>
+    <div class="toc__row"><span class="toc__n">8</span><span class="toc__t">Testing</span><span class="toc__d">what 167 cases actually assert</span></div>
+    <div class="toc__row"><span class="toc__n">9</span><span class="toc__t">Running it in production</span><span class="toc__d">backups, monitoring, deploy</span></div>
+    <div class="toc__row"><span class="toc__n">10</span><span class="toc__t">What remains</span><span class="toc__d">honest, with estimates</span></div>
+    <div class="toc__row"><span class="toc__n">11</span><span class="toc__t">How to run it</span><span class="toc__d">three commands</span></div>
+  </div>
+</section>
+
+<!-- ─── 2. Audit ───────────────────────────────────────────────────────────── -->
+<section>
+  <h2>2 &nbsp; What the audit found</h2>
+
+  <p>
+    The starting documents claimed 26 modules built and 53 test cases with 34 verified.
+    Checking each claim against the code told a different story.
+  </p>
+
+  <h3>Claims that did not hold</h3>
+  <table>
+    <thead>
+      <tr><th style="width:38%">Documented as</th><th>What the code actually had</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>“53 test cases, ~34 verified”</td>
+        <td><b>Zero test files.</b> No test runner in dependencies, no CI. The Python smoke scripts the doc referred to were not in the repository. Every “verified” meant “someone once watched it work”.</td>
+      </tr>
+      <tr>
+        <td>Leaderboard hierarchy ✅ built</td>
+        <td>The <code>game</code> scope accepted its parameter and ignored it, because sessions carried no game. A “game board” was the global board renamed. The old test only asserted HTTP 200, so it could not tell.</td>
+      </tr>
+      <tr>
+        <td>Auth “Google-ready”</td>
+        <td>A <code>googleId</code> field on two schemas. No OAuth flow, no library.</td>
+      </tr>
+      <tr>
+        <td>2FA in the security list</td>
+        <td>A <code>twoFactorEnabled: false</code> boolean. No TOTP anywhere.</td>
+      </tr>
+      <tr>
+        <td>Redis, BullMQ, Sentry, PostHog, FCM, Resend, Spaces</td>
+        <td>Redis ran in Docker and the code never connected to it. The rest were comments saying “in P6”. Zero code, zero dependencies.</td>
+      </tr>
+      <tr>
+        <td>Cross-zone, Smart Sync, data migration</td>
+        <td>No code at all — and the plan makes cross-zone a sign-off gate and two Smart Sync and two migration cases P0.</td>
+      </tr>
+      <tr>
+        <td>“Overall product ~86%”</td>
+        <td>Counted backend logic and treated documentation as a deliverable. Two whole client apps sat inside the “remaining 14%”.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Blockers that would have stopped a launch outright</h3>
+
+  <div class="callout callout--bad">
+    <b>Nobody could have logged in.</b> OTP had no delivery provider at all — just a
+    <code>TODO(P5)</code> and a development log line. In production the code was
+    generated, hashed, stored, and never sent.
+  </div>
+
+  <div class="callout callout--bad">
+    <b>Secrets fell back to public defaults.</b> A deploy missing
+    <code>JWT_ACCESS_SECRET</code> silently used <code>"dev-access-secret"</code>,
+    making every token forgeable. The same for the payment webhook secret, which
+    would have let anyone credit any wallet.
+  </div>
+
+  <div class="callout callout--warn">
+    <b>No backups.</b> Wallet balances are derived from the ledger and nothing else,
+    so losing that collection loses every customer's balance with no way to
+    reconstruct it. There was no dump, no schedule and no restore procedure.
+  </div>
+
+  <div class="callout callout--warn">
+    <b>No version control.</b> <code>git log</code> returned “not a git repository”.
+    No history, no review, no rollback, on software that moves money.
+  </div>
+</section>
+
+<!-- ─── 3. How it works ────────────────────────────────────────────────────── -->
+<section>
+  <h2>3 &nbsp; How the product works</h2>
+
+  <p class="lead">
+    SEIKA runs a gaming zone: the PCs, the money, the shop, the events, and the
+    player-facing progression that brings people back. One backend holds all the
+    logic; three clients talk to it and decide nothing themselves.
+  </p>
+
+  <h3>The core loop</h3>
+  <p>
+    Everything else hangs off this sequence, and its most important property is that
+    identity and payment are two separate steps.
+  </p>
+
+  <div class="flow">
+    <div class="flow__step">
+      <div class="flow__n" data-tone="lock">1</div>
+      <div class="flow__body">
+        <div class="flow__title">The PC sits locked, showing a QR code</div>
+        <div class="flow__desc">The kiosk covers the screen. The code is short-lived and refreshes every 40 seconds.</div>
+      </div>
+    </div>
+    <div class="flow__step">
+      <div class="flow__n" data-tone="lock">2</div>
+      <div class="flow__body">
+        <div class="flow__title">The player scans it — and the PC stays locked</div>
+        <div class="flow__desc">Scanning only says who is sitting there. The session is created as <code>PENDING_AUTH</code> with zero XP. This is the product's central rule: <b>a QR scan never unlocks a PC.</b></div>
+      </div>
+    </div>
+    <div class="flow__step">
+      <div class="flow__n" data-tone="lock">3</div>
+      <div class="flow__body">
+        <div class="flow__title">They choose how long to play, and see the price first</div>
+        <div class="flow__desc">1, 2 or 3 hours as a fixed block, or Open Hour metered per minute with a minimum deposit. The rate is frozen into the session at this moment, so a later price change cannot alter what they were quoted.</div>
+      </div>
+    </div>
+    <div class="flow__step">
+      <div class="flow__n" data-tone="lock">4</div>
+      <div class="flow__body">
+        <div class="flow__title">The Session Authorization Engine decides</div>
+        <div class="flow__desc">Six sources can pay: wallet, cash approved by a cashier, a paid booking, a prepaid package, a voucher, or postpaid where the zone allows it. If none of them passes, the PC stays locked and the player is told exactly what is needed.</div>
+      </div>
+    </div>
+    <div class="flow__step">
+      <div class="flow__n" data-tone="open">5</div>
+      <div class="flow__body">
+        <div class="flow__title">The server unlocks the PC</div>
+        <div class="flow__desc">Only now, and only from the server. The kiosk obeys; it has no unlock path of its own.</div>
+      </div>
+    </div>
+    <div class="flow__step">
+      <div class="flow__n" data-tone="open">6</div>
+      <div class="flow__body">
+        <div class="flow__title">They play, and can order to their seat</div>
+        <div class="flow__desc">The shop knows which PC they are at, because the order is bound to their live session. There is no PC number to type and get wrong.</div>
+      </div>
+    </div>
+    <div class="flow__step">
+      <div class="flow__n" data-tone="lock">7</div>
+      <div class="flow__body">
+        <div class="flow__title">The session ends and the PC re-locks</div>
+        <div class="flow__desc">Valid minutes are billed in one database transaction, XP is awarded from those minutes only, level-ups grant coins, and the PC returns to the pool.</div>
+      </div>
+    </div>
+  </div>
+
+  <h3>The rules the system is built to protect</h3>
+  <table>
+    <thead><tr><th style="width:32%">Rule</th><th>How it is enforced</th></tr></thead>
+    <tbody>
+      <tr><td><b>A QR scan is not an unlock</b></td><td>Attaching creates a locked session. Unlocking requires a payment source to pass, and the command comes from the server.</td></tr>
+      <tr><td><b>XP only from real play</b></td><td>XP is computed from valid session minutes. Logging in, scanning, or abandoning a scan earns nothing.</td></tr>
+      <tr><td><b>Wallet is money, Coins are not</b></td><td>Two separate ledgers. Coins are never cash-withdrawable and never appear in the money ledger.</td></tr>
+      <tr><td><b>Balance is never stored</b></td><td>It is the sum of an append-only ledger. There is no endpoint that writes a balance, and a test asserts that none exists.</td></tr>
+      <tr><td><b>Money moves atomically</b></td><td>Every debit, refund, booking payment and shop order commits inside a MongoDB transaction or rolls back whole.</td></tr>
+      <tr><td><b>Tenants are isolated</b></td><td>One owner cannot see another's players, wallets, sessions, orders, revenue, staff or audit trail. Co-hosted events share event data only.</td></tr>
+      <tr><td><b>Sensitive actions are logged</b></td><td>Who, what role, which zone, old and new values, and a reason where one is required.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The pieces</h3>
+  <dl class="kv">
+    <dt>API</dt><dd>Node, Express, TypeScript, MongoDB replica set (transactions), Socket.IO. All logic lives here.</dd>
+    <dt>Owner console</dt><dd>Next.js. Desktop and phone, same permissions on both.</dd>
+    <dt>Player app</dt><dd>Next.js PWA, installable, phone-first.</dd>
+    <dt>PC kiosk</dt><dd>Electron on each gaming PC. Displays, reports, obeys.</dd>
+    <dt>Shared packages</dt><dd>Wire types and a typed API client used by every client.</dd>
+  </dl>
+</section>
+
+<!-- ─── 4. Owner console ───────────────────────────────────────────────────── -->
+<section>
+  <h2>4 &nbsp; The owner console</h2>
+
+  <p class="lead">
+    Built mobile-first, because the plan makes owner-on-a-phone a P0 case and an owner
+    checks their zone from a phone far more often than from a desk. The sidebar becomes
+    a bottom tab bar under 900px — same routes, same data, same permissions.
+  </p>
+
+  <figure>
+    <img src="dash-live.png" alt="Owner console, live PC map" />
+    <figcaption>
+      <b>Live.</b> The screen an owner leaves open. Eight PCs, five in use, each with a
+      running timer derived from its start timestamp so it stays correct after a laptop
+      sleeps. Everything here is pushed over Socket.IO: when a player starts a session
+      the tile changes without a refresh. Revenue, top-ups, occupancy and the waiting
+      order count sit above it.
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="dash-orders.png" alt="Owner console, order queue" />
+    <figcaption>
+      <b>Order queue.</b> Seat orders as they arrive, with the seat the API bound them
+      to — never a PC number someone typed. One tap advances the state; cancelling
+      refunds the wallet and restores stock, and says so before doing it.
+    </figcaption>
+  </figure>
+</section>
+
+<section class="cont">
+  <figure>
+    <img src="dash-sessions.png" alt="Owner console, sessions" />
+    <figcaption>
+      <b>Sessions.</b> Live sessions with their mode and payment source, then history.
+      Refunds live here because this is where a cashier is standing when a player says
+      the PC crashed — and the prompt states that a refund reverses the wallet, the XP
+      and the coins together, and records a reason on the audit log.
+    </figcaption>
+  </figure>
+
+  <figure>
+    <img src="dash-revenue.png" alt="Owner console, revenue and reports" />
+    <figcaption>
+      <b>Revenue &amp; reports.</b> Today's split, then occupancy with peak hours and
+      empty seat-time, player retention, and shop performance. Exports cover six
+      datasets in CSV, Excel and PDF with a date range, and every download is recorded
+      on the audit log with what was taken.
+    </figcaption>
+  </figure>
+</section>
+
+<section class="cont">
+  <div class="grid2">
+    <figure>
+      <img src="dash-shop.png" alt="Owner console, shop" />
+      <figcaption><b>Shop.</b> Products and stock, with low-stock called out where a cashier will see it.</figcaption>
+    </figure>
+    <figure>
+      <img src="dash-audit.png" alt="Owner console, audit log" />
+      <figcaption><b>Audit.</b> Every sensitive action with who did it. Filterable, because an owner opens this when a number looks wrong.</figcaption>
+    </figure>
+  </div>
+
+  <div class="grid2">
+    <figure>
+      <img src="dash-events.png" alt="Owner console, events and cross-zone" />
+      <figcaption><b>Events.</b> Including cross-zone: connections with other owners, and each event's verification state.</figcaption>
+    </figure>
+    <figure>
+      <img src="dash-migration.png" alt="Owner console, migration wizard" />
+      <figcaption><b>Import.</b> Bringing players over from previous software. The review step is the point of the screen.</figcaption>
+    </figure>
+  </div>
+
+  <h3>The same console on a phone</h3>
+  <p>
+    Not a cut-down version. The plan is explicit that mobile must not be a weaker
+    security layer, so the phone layout runs the same code with the same permissions —
+    only the navigation changes shape.
+  </p>
+
+  <div class="phones phones--2">
+    <figure>
+      <img src="dash-mobile-live.png" alt="Owner console on a phone, live map" />
+      <figcaption><b>Live on a phone.</b> The same PC map and the same live updates, with the sidebar as a thumb-reachable tab bar.</figcaption>
+    </figure>
+    <figure>
+      <img src="dash-mobile-orders.png" alt="Owner console on a phone, order queue" />
+      <figcaption><b>Orders on a phone.</b> What a cashier actually uses mid-shift, one-handed.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ─── 5. Player app ──────────────────────────────────────────────────────── -->
+<section>
+  <h2>5 &nbsp; The player app</h2>
+
+  <p class="lead">
+    An installable PWA, designed for someone standing at a PC holding a drink. The two
+    things they came for — their balance, and how to start playing — are above the fold
+    on the first screen.
+  </p>
+
+  <div class="phones">
+    <figure>
+      <img src="player-passport.png" alt="Player passport" />
+      <figcaption><b>Passport.</b> Level, rank, XP progress, wallet and coins in one card. A live session shows as a running clock.</figcaption>
+    </figure>
+    <figure>
+      <img src="player-play.png" alt="Player, playing" />
+      <figcaption><b>Playing.</b> The block they chose and a timer, plus a reminder that the shop already knows their seat.</figcaption>
+    </figure>
+    <figure>
+      <img src="player-wallet.png" alt="Player wallet" />
+      <figcaption><b>Wallet.</b> The balance and the ledger it is computed from, so what they see adds up to what they have.</figcaption>
+    </figure>
+  </div>
+
+  <div class="phones">
+    <figure>
+      <img src="player-shop.png" alt="Player shop" />
+      <figcaption><b>Shop.</b> No PC picker and no zone picker — there is nothing to pick, because the order goes to the seat the API already knows.</figcaption>
+    </figure>
+    <figure>
+      <img src="player-ranks.png" alt="Player leaderboards" />
+      <figcaption><b>Ranks.</b> Global, country, city, zone and per-game boards, with the player's own row highlighted wherever it falls.</figcaption>
+    </figure>
+    <figure>
+      <img src="player-profile.png" alt="Player profile" />
+      <figcaption><b>Profile.</b> Gamer tag and location, which is also what decides the geo leaderboards they appear on.</figcaption>
+    </figure>
+  </div>
+
+  <h3>Where the core rule becomes visible</h3>
+  <p>
+    The hour picker is the moment the product's main rule is made honest to the player.
+    Scanning has already happened and the PC is still locked; the screen says so in
+    plain words, shows the price of every option before it is chosen, and dims anything
+    their balance will not cover. Nothing is charged until they confirm.
+  </p>
+
+  <div class="phones phones--2">
+    <figure>
+      <img src="player-login.png" alt="Player sign-in" />
+      <figcaption><b>Sign in.</b> One code to their own number. There is no password in SEIKA — a shared counter password is the thing that actually leaks in a gaming zone.</figcaption>
+    </figure>
+    <figure>
+      <img src="dash-login.png" alt="Staff sign-in" style="width:100%" />
+      <figcaption><b>Staff sign in.</b> The same mechanism for staff, with the role deciding what they see once inside.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ─── 6. What was built ──────────────────────────────────────────────────── -->
+<section>
+  <h2>6 &nbsp; What was built</h2>
+
+  <h3>Against the plan, module by module</h3>
+  <table>
+    <thead>
+      <tr><th style="width:6%">ID</th><th style="width:26%">Module</th><th style="width:11%">Status</th><th class="num" style="width:9%">Tests</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>A</td><td>Auth &amp; accounts</td><td><span class="tag tag--ok">done</span></td><td class="num">7</td><td>Profile customization added; OTP delivery built</td></tr>
+      <tr><td>B</td><td>Kiosk &amp; session authorization</td><td><span class="tag tag--ok">done</span></td><td class="num">10</td><td>Six payment sources; Windows still untested</td></tr>
+      <tr><td>C</td><td>Top-up + hour selection</td><td><span class="tag tag--ok">done</span></td><td class="num">8</td><td>1/2/3h blocks and Open Hour, price frozen at start</td></tr>
+      <tr><td>D</td><td>Wallet, payments, ledger</td><td><span class="tag tag--ok">done</span></td><td class="num">23</td><td>Provider abstraction added</td></tr>
+      <tr><td>E</td><td>Bookings</td><td><span class="tag tag--ok">done</span></td><td class="num">11</td><td>No-show automation still manual</td></tr>
+      <tr><td>F</td><td>Player mobile app</td><td><span class="tag tag--new">built</span></td><td class="num">—</td><td>Built this round; no automated UI tests yet</td></tr>
+      <tr><td>G</td><td>Owner mobile app</td><td><span class="tag tag--new">built</span></td><td class="num">—</td><td>Built this round; RBAC behind it covered by M</td></tr>
+      <tr><td>H</td><td>Shop &amp; seated-zone</td><td><span class="tag tag--ok">done</span></td><td class="num">11</td><td>Seat binding now enforced server-side</td></tr>
+      <tr><td>I</td><td>XP, ranks, leaderboards</td><td><span class="tag tag--ok">done</span></td><td class="num">13</td><td>Game tracking added, so the game board is real</td></tr>
+      <tr><td>J</td><td>Events &amp; cross-zone</td><td><span class="tag tag--new">built</span></td><td class="num">14</td><td>Was zero code. §8 two-zone flow passes</td></tr>
+      <tr><td>K</td><td>Smart Sync</td><td><span class="tag tag--new">built</span></td><td class="num">24</td><td>Was zero code. Policy server-side, client on the kiosk</td></tr>
+      <tr><td>L</td><td>Analytics &amp; export</td><td><span class="tag tag--ok">done</span></td><td class="num">12</td><td>Six datasets in CSV, Excel and PDF</td></tr>
+      <tr><td>M</td><td>RBAC, security, isolation</td><td><span class="tag tag--ok">done</span></td><td class="num">12</td><td></td></tr>
+      <tr><td>N</td><td>Data migration</td><td><span class="tag tag--new">built</span></td><td class="num">13</td><td>Was zero code</td></tr>
+      <tr><td>—</td><td>Operations</td><td><span class="tag tag--new">built</span></td><td class="num">9</td><td>Health, readiness, crash scrubbing, rate limiting</td></tr>
+    </tbody>
+  </table>
+
+  <h3>The four modules that did not exist</h3>
+
+  <h4>J &mdash; Cross-zone events</h4>
+  <p>
+    The plan makes this a sign-off gate: the product cannot be signed off until a
+    cross-zone flow has been tested end to end with two zones and two sets of players.
+    Built: owner-to-owner connections, co-host invitations, per-zone registration where
+    each player pays in their own zone's wallet, per-zone check-in, a shared bracket
+    that exposes event data and nothing private, result verification requiring every
+    zone to submit and agree, a dispute flow that blocks payout, and a prize split that
+    credits each winner in their own zone so money never crosses a tenant boundary.
+  </p>
+
+  <h4>K &mdash; Smart Sync</h4>
+  <p>
+    Two of its cases are P0 and both are about harm: syncing the wrong folder uploads
+    a player's browser cookies, and syncing an anti-cheat folder gets them banned. The
+    policy lives on the server, so it is one auditable decision and testable without a
+    Windows box. The kiosk enumerates candidate files, asks the API to screen them, and
+    reads only what came back allowed. Anti-cheat paths are refused before the
+    whitelist is even consulted, so a mis-configured profile cannot opt a zone in.
+  </p>
+
+  <h4>N &mdash; Data migration</h4>
+  <p>
+    A dependency-free CSV parser, column mapping guessed from common header names, and
+    a validation report that flags bad rows without stopping the good ones. A
+    carried-over balance becomes an <code>OPENING_BALANCE</code> ledger entry, never a
+    stored balance. Imported players are unverified until their first OTP login proves
+    they own the number. The whole import is one transaction.
+  </p>
+
+  <h4>L7 &mdash; Excel and PDF export</h4>
+  <p>
+    Six datasets rendered as CSV, real <code>.xlsx</code>, or a landscape PDF. Values
+    beginning <code>=</code>, <code>+</code>, <code>-</code> or <code>@</code> are
+    neutralised, because a player picks their own gamer tag and it ends up in a
+    spreadsheet on an owner's machine.
+  </p>
+</section>
+
+<!-- ─── 7. Bugs ────────────────────────────────────────────────────────────── -->
+<section>
+  <h2>7 &nbsp; Bugs the work found</h2>
+
+  <p class="lead">
+    Eleven real defects, every one in code that had been recorded as verified. Four of
+    them could only be found by running the product rather than reading it.
+  </p>
+
+  <table>
+    <thead><tr><th style="width:9%">Severity</th><th style="width:30%">Defect</th><th>Why it mattered</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="tag tag--bad">S1</span></td>
+        <td>Two players could be billed on one PC</td>
+        <td>The “one live session per PC” index was keyed on <code>{pcId, status}</code>, making the <i>pair</i> unique — so a PC could hold a pending session and an active one at the same time.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--bad">S1</span></td>
+        <td>Anyone could cancel a stranger's paid booking</td>
+        <td>The cancel path took an actor id and never checked it. Any signed-in player could free someone else's reserved seat by id, across zones.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--bad">S1</span></td>
+        <td>Anyone could trigger a debit on another player's wallet</td>
+        <td>Paying a booking debited the booking's player, and the same missing check let a stranger start it.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--bad">S1</span></td>
+        <td>A player in zone A could order from zone B</td>
+        <td>The order took <code>zoneId</code> from the request body. The seat is now derived from the player's live session, so it is impossible by construction.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--warn">S2</span></td>
+        <td>The game leaderboard was the global board renamed</td>
+        <td><code>scope=game</code> was accepted and ignored. The existing test asserted only HTTP 200, which a board with the wrong contents passes.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--warn">S2</span></td>
+        <td>Migration uploads could never have worked</td>
+        <td>The endpoint documented 5&nbsp;MB while the body parser ran at its 100&nbsp;KB default, and an oversized body returned 500 instead of 413.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--warn">S2</span></td>
+        <td>Order lines showed <code>₹NaN</code></td>
+        <td>The queue converted the order total from Decimal128 but not the per-line prices, so any client computing price × quantity got NaN. Visible on the first order that reached the queue.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--warn">S2</span></td>
+        <td>The SDK could not call the API from a browser</td>
+        <td><code>fetch</code> was stored detached from <code>window</code>, throwing “Illegal invocation”. Nothing but a real browser would have caught it.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--warn">S2</span></td>
+        <td>The player app could not reach the API</td>
+        <td>CORS allowed only port 3000; the player app runs on 3001.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--warn">S2</span></td>
+        <td>Concurrent payment callbacks could double-credit</td>
+        <td>Idempotency was a read-then-write. Two simultaneous deliveries both passed the check. Now a conditional claim inside the transaction, tested with three at once.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--warn">S2</span></td>
+        <td>Player profile customization did not exist</td>
+        <td>Plan case A6. The endpoint was simply absent.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout">
+    <b>One test-design lesson worth keeping.</b> The old suite had a case for the game
+    leaderboard, and it passed for months while the feature was absent, because it only
+    checked that the response was HTTP 200. A test that asserts a status code and not a
+    result can pass on a feature that was never built.
+  </div>
+</section>
+
+<!-- ─── 8. Testing ─────────────────────────────────────────────────────────── -->
+<section>
+  <h2>8 &nbsp; Testing</h2>
+
+  <p class="lead">
+    167 automated cases, mapped one-to-one onto the plan's modules, running in CI on
+    every push. They replace 53 manual ones that had no reproducible form.
+  </p>
+
+  <div class="panel">
+    <h4>How they run</h4>
+    <p style="margin-bottom:0">
+      The API suite spins up its own in-memory MongoDB <b>replica set</b> — not a
+      standalone — so every money path executes inside a real multi-document
+      transaction. Testing a wallet against a standalone mongod silently skips the
+      thing most worth testing. No Docker, no seeding, no manual steps.
+    </p>
+  </div>
+
+  <h3>What they actually assert</h3>
+  <table>
+    <thead><tr><th style="width:24%">Area</th><th>Examples</th></tr></thead>
+    <tbody>
+      <tr><td>Money</td><td>Balance equals the sum of the ledger. No endpoint can write a balance. A webhook replay credits once. A forged signature credits nothing. A failure between debit and commit leaves no partial write. A refund reverses wallet, XP and coins together.</td></tr>
+      <tr><td>The core rule</td><td>A QR scan leaves the PC locked with zero XP. An insufficient balance never unlocks. Cash needs a cashier. A one-use voucher is exhausted after one use. A package deducts minutes and leaves the wallet alone.</td></tr>
+      <tr><td>Isolation</td><td>Owner A cannot see owner B's sessions, orders, products, analytics, audit trail or wallets. Staff of one zone cannot act on another's bookings. A co-host sees shared event data and never private customer or financial data.</td></tr>
+      <tr><td>Hour selection</td><td>A 2-hour block freezes its price and bills the block even when ended early. Open Hour needs a deposit and meters actual minutes. Anything that is not 1, 2 or 3 hours is refused.</td></tr>
+      <tr><td>Cross-zone</td><td>The full two-zone flow the plan requires: connect, co-host, register and check in per zone, agree on results, dispute, resolve, settle — with prizes credited in each winner's own zone.</td></tr>
+      <tr><td>Smart Sync</td><td>Browser profiles, chat clients, credential stores, personal folders, executables, traversal and absolute paths all refused; anti-cheat paths refused even when a profile wrongly allows them, and logged.</td></tr>
+      <tr><td>Operations</td><td>Readiness returns 503 when Mongo is unreachable. Crash reports carry no OTPs, tokens, client keys or player data. Rate limiting degrades rather than failing the API.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>What is not automated, and why</h3>
+  <ul>
+    <li><b>The two client UIs.</b> Both were driven end to end by hand in a browser — sign in, attach, choose a block, play, order to seat, top up — and the wallet arithmetic checked against its ledger. Automated UI tests are not written yet.</li>
+    <li><b>Kiosk behaviour on Windows.</b> The disk-side Smart Sync logic has 10 tests that run without Electron, but the lock itself needs real hardware.</li>
+    <li><b>Load.</b> A 40-PC zone all heartbeating and ordering has not been simulated.</li>
+  </ul>
+</section>
+
+<!-- ─── 9. Production ──────────────────────────────────────────────────────── -->
+<section>
+  <h2>9 &nbsp; Running it in production</h2>
+
+  <h3>Backups &mdash; the part that mattered most</h3>
+  <p>
+    Wallet balances are derived from the ledger and nothing else. Losing that
+    collection is not losing analytics; it is losing every customer's balance with no
+    way to reconstruct it. There were no backups at all.
+  </p>
+
+  <table>
+    <thead><tr><th style="width:32%">Piece</th><th>What it does, and why that shape</th></tr></thead>
+    <tbody>
+      <tr><td>Dump, every 4 hours</td><td><code>mongodump --oplog</code>, so the dump is point-in-time consistent across collections and a restored ledger is trustworthy rather than approximately right.</td></tr>
+      <tr><td>Verify before trusting</td><td>Every dump is opened with <code>--dryRun</code>. A suspiciously small dump fails the job instead of replacing a good one.</td></tr>
+      <tr><td>Encrypt and move off-box</td><td>GPG, then upload. A backup on the same droplet does not survive the droplet.</td></tr>
+      <tr><td>Dead-man's switch</td><td>A ping on success. Without it, “no alert” and “no backups for three weeks” look identical.</td></tr>
+      <tr><td>Monthly restore drill</td><td>Restores into a throwaway database and asserts the collections exist, every balance is computable and non-negative, no ledger row is orphaned, and the session-guard index came back — that last one is a correctness check, since without it two players can be billed on one PC.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Refusing to start unsafely</h3>
+  <p>
+    A production deploy now fails loudly rather than running insecurely. It will not
+    boot with development JWT or webhook secrets, without an OTP provider that can
+    actually deliver, with payments in mock mode, with a localhost database URI, or
+    with localhost left in the CORS list. Each of those fails silently and expensively
+    otherwise.
+  </p>
+
+  <h3>The rest of the stack</h3>
+  <dl class="kv">
+    <dt>Monitoring</dt><dd><code>/health</code> for liveness; <code>/health/ready</code> pings Mongo for real and returns 503 when it cannot serve — a socket can be “connected” to a primary that no longer accepts writes. Sentry reports crashes with OTPs, tokens and player data scrubbed out.</dd>
+    <dt>Rate limiting</dt><dd>Backed by Redis so the window is shared across instances; an in-process counter gives an attacker the full quota per instance behind a load balancer. It degrades to local counting rather than taking the API down with it.</dd>
+    <dt>TLS &amp; proxy</dt><dd>Nginx with HSTS, and a 7-day read timeout on the Socket.IO path so kiosks do not reconnect every minute. The payment webhook is deliberately exempt from coarse rate limits: dropping it loses a top-up the player has already been charged for.</dd>
+    <dt>Deploy</dt><dd>Takes a backup, builds, waits for readiness, swaps, and rolls itself back if the new release never becomes ready. The outgoing image stays tagged, so a rollback is one command and not a rebuild.</dd>
+    <dt>CI</dt><dd>Typechecks every package, runs both test suites, builds both clients and the production image, on every push.</dd>
+  </dl>
+</section>
+
+<!-- ─── 10. What remains ───────────────────────────────────────────────────── -->
+<section>
+  <h2>10 &nbsp; What remains</h2>
+
+  <table>
+    <thead><tr><th style="width:8%">Pri</th><th style="width:30%">Work</th><th style="width:12%">Estimate</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="tag tag--bad">1</span></td>
+        <td>Run the kiosk on real Windows</td>
+        <td>~1 week</td>
+        <td>Never done. Plan §11 forbids signing this off by simulation. Needs two PCs, Assigned Access configured, and a full day of lock, unlock, heartbeat and Smart Sync.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--warn">2</span></td>
+        <td>Restore drill against a production-sized dump</td>
+        <td>1 day</td>
+        <td>The tooling exists and passes on test data. Timing it on real volume turns the recovery window into a number instead of a hope.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--warn">3</span></td>
+        <td>Remaining client screens</td>
+        <td>1–2 weeks</td>
+        <td>Bookings and rewards in the player app; announcements and booking management in the console.</td>
+      </tr>
+      <tr>
+        <td><span class="tag tag--warn">4</span></td>
+        <td>Load test a 40-PC zone</td>
+        <td>2–3 days</td>
+        <td>Heartbeats, live sessions and the order queue under real concurrency.</td>
+      </tr>
+      <tr>
+        <td>5</td><td>Multi-node MongoDB</td><td>2–3 days</td>
+        <td>The single node gives transactions, not high availability.</td>
+      </tr>
+      <tr>
+        <td>6</td><td>Google OAuth, 2FA, no-show automation</td><td>1 week</td>
+        <td>Listed in the original plan, never built. None of them blocks a pilot.</td>
+      </tr>
+      <tr>
+        <td>7</td><td>Pilot zone</td><td>2 weeks min.</td>
+        <td>One real zone with real PCs, a cash counter and real network drops, gated on zero open S0/S1 issues.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout--ok">
+    <b>Recommended order.</b> Windows first — it is the only item that can invalidate
+    an assumption rather than just take time. The restore drill next, because it is a
+    day and it retires the largest financial risk. Then the remaining screens, which
+    can run in parallel with pilot preparation.
+  </div>
+
+  <h3>Practices worth keeping</h3>
+  <ul>
+    <li>The test suite is the release gate. A plan case with no automated test is not verified; it is something someone once saw work.</li>
+    <li>Assert results, not status codes. A test that only checks HTTP 200 can pass on a feature that does not exist.</li>
+    <li>Check money against the ledger, never through a response body.</li>
+    <li>Give tenant isolation a test per feature, not one test in total.</li>
+    <li>Run the thing. Four of the eleven defects surfaced only in a real browser, and one of them would have shipped.</li>
+  </ul>
+</section>
+
+<!-- ─── 11. How to run ─────────────────────────────────────────────────────── -->
+<section>
+  <h2>11 &nbsp; How to run it</h2>
+
+  <div class="panel">
+    <h4>Everything, locally</h4>
+    <p class="mono" style="margin-bottom:2mm">
+      pnpm install<br />
+      pnpm dev:api:mem&nbsp;&nbsp;&nbsp;&nbsp;# API + in-memory Mongo replica set → :4000<br />
+      pnpm dev:dashboard&nbsp;&nbsp;# owner console → :3000<br />
+      pnpm dev:player&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# player app → :3001
+    </p>
+    <p class="small muted" style="margin-bottom:0">
+      No Docker needed: the API starts its own in-memory replica set, so transactions work out of the box.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h4>A zone to click around</h4>
+    <p style="margin-bottom:2mm">
+      <code>POST /api/dev/seed</code> creates a zone, a PC, and one staff member per role.
+    </p>
+    <ul style="margin-bottom:0">
+      <li>Staff sign in with <code>9700000001</code>–<code>04</code> (cashier, manager, technician, event manager).</li>
+      <li>Any phone number creates a player.</li>
+      <li>Outside production the API returns the OTP in its response, so both apps autofill it.</li>
+    </ul>
+  </div>
+
+  <div class="panel">
+    <h4>Tests</h4>
+    <p class="mono" style="margin-bottom:2mm">
+      pnpm test&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# 157 API + 10 kiosk<br />
+      pnpm typecheck&nbsp;&nbsp;&nbsp;&nbsp;# every package
+    </p>
+    <p class="small muted" style="margin-bottom:0">
+      Roughly 20 seconds for the whole suite.
+    </p>
+  </div>
+
+  <div class="panel">
+    <h4>Production</h4>
+    <p style="margin-bottom:2mm">
+      <code>infra/README.md</code> covers the full path: Docker Compose for Mongo and
+      Redis, nginx with certbot, the backup cron and the monthly restore drill, and
+      the deploy script.
+    </p>
+    <p class="small muted" style="margin-bottom:0">
+      The API refuses to boot on an unsafe production configuration, and tells you which setting is wrong.
+    </p>
+  </div>
+
+  <h3>Where things live</h3>
+  <dl class="kv">
+    <dt>apps/api</dt><dd>The backend. All logic, 157 tests.</dd>
+    <dt>apps/dashboard</dt><dd>Owner and staff console.</dd>
+    <dt>apps/player</dt><dd>Player PWA.</dd>
+    <dt>apps/kiosk</dt><dd>Electron PC client.</dd>
+    <dt>packages/types</dt><dd>Shared wire types.</dd>
+    <dt>packages/sdk</dt><dd>Typed API client used by every client.</dd>
+    <dt>infra</dt><dd>Compose, nginx, backup, restore drill, deploy.</dd>
+    <dt>docs/STATUS.md</dt><dd>The honest running status. Start there.</dd>
+    <dt>docs/TEST_CASES.md</dt><dd>Coverage mapped to the plan's modules.</dd>
+  </dl>
+
+  <div class="callout" style="margin-top:6mm">
+    <b>One number to remember.</b> ~85% shippable, and the 15% is named rather than
+    vague: Windows, a timed restore, a few screens, and a load test. The earlier
+    reports said 86% when two apps and all testing did not exist — the difference is
+    not the figure, it is that this one can be checked.
+  </div>
+</section>
+
+</body>
+</html>
