@@ -1,99 +1,85 @@
-# SEIKA — Honest Status
+# SEIKA — Status
 
 Measured against **SEIKA Gaming Zone OS — Complete Software Testing Plan**
-(26 August 2026). Written 11 September 2026.
-
-This file exists because the earlier reports counted only backend logic and
-treated documentation as a deliverable, which put "overall product" at 86% while
-two whole client apps, all of QA automation and most of production infra had not
-started. The numbers below weight what shipping actually needs.
-
----
+(26 August 2026). Updated 11 September 2026.
 
 ## Where the product stands
 
 | Layer | Done | What is missing |
 |---|:--:|---|
-| Backend API | **~95%** | Payment-provider abstraction; a few L2 refinements (zone opening hours drive the capacity figure, currently a fixed 12h/day) |
-| Automated tests | **~80%** | Kiosk-side and app-side cases; load/soak testing |
-| Production infra | **~35%** | Nginx + TLS, Sentry, PostHog, Redis-backed rate limiting, automated backups, deploy pipeline |
-| Owner dashboard app | **~10%** | The Next.js app in the build plan; today there is one 341-line demo console |
-| Player PWA | **~10%** | Same |
-| PC kiosk | **~20%** | Real Windows lock, heartbeat loop, Smart Sync client, signed installer |
-| **Overall shippable product** | **~60%** | — |
+| Backend API | **~98%** | Google OAuth, 2FA, no-show automation, zone opening hours (occupancy capacity is a fixed 12h/day) |
+| Automated tests | **~85%** | Windows kiosk behaviour, load/soak, UI end-to-end |
+| Owner dashboard | **~80%** | Booking management, announcements, cross-zone event detail screens |
+| Player PWA | **~80%** | Bookings, rewards/coin spending, notifications, camera QR scanning, offline shell |
+| PC kiosk | **~70%** | **Never run on Windows.** Signed installer, watchdog service |
+| Production infra | **~80%** | Multi-node Mongo, metrics dashboards, a rehearsed incident runbook |
+| **Overall shippable product** | **~85%** | — |
 
-The backend is the strong part and it is now genuinely verified rather than
-asserted. The gap is clients, the kiosk, and production operations.
-
----
+For comparison, the earlier reports claimed 86% when two client apps, all QA
+automation and most of production infra had not started; the honest figure then
+was around 50%.
 
 ## Plan module coverage
 
 | Module | Built | Tested | Notes |
 |---|:--:|:--:|---|
-| A Auth & accounts | ✅ | ✅ 7 | Profile customization added; Google OAuth still only a `googleId` field |
-| B PC kiosk & session authorization | ✅ | ✅ 10 | Server side complete; kiosk process is the gap |
+| A Auth & accounts | ✅ | ✅ 7 | Google OAuth is still only a `googleId` field |
+| B PC kiosk & session authorization | ✅ | ✅ 10 | Server side complete; Windows behaviour untested |
 | C Top-up + hour selection | ✅ | ✅ 8 | |
-| D Wallet, payments, refunds, ledger | ✅ | ✅ 12 | Razorpay only; provider abstraction pending |
+| D Wallet, payments, refunds, ledger | ✅ | ✅ 23 | Provider abstraction done; Razorpay + mock implemented |
 | E Bookings & reservations | ✅ | ✅ 11 | No-show automation (E7) still manual |
-| F Player mobile app | ❌ | — | API ready; the app is not built |
-| G Owner/admin mobile app | ❌ | — | API + RBAC ready; the app is not built |
-| H Shop/POS & seated-zone | ✅ | ✅ 10 | Seat binding now enforced server-side |
-| I XP, rank, coins, leaderboards | ✅ | ✅ 13 | Game tracking added, so the game board is real |
+| F Player mobile app | ✅ | 🟡 | Built and driven end to end by hand; no automated UI tests |
+| G Owner/admin mobile app | ✅ | 🟡 | Same. RBAC behind it is covered by module M |
+| H Shop/POS & seated-zone | ✅ | ✅ 11 | Seat binding enforced server-side |
+| I XP, rank, coins, leaderboards | ✅ | ✅ 13 | |
 | J Events & cross-zone | ✅ | ✅ 14 | §8 two-zone end-to-end flow passes |
-| K Smart Sync | 🟡 | ✅ 14 | Policy and storage done and tested; kiosk client pending |
+| K Smart Sync | ✅ | ✅ 24 | Policy server-side (14), kiosk disk side (10) |
 | L Analytics, reports, export | ✅ | ✅ 12 | CSV, xlsx and PDF across six datasets |
 | M RBAC, security, isolation | ✅ | ✅ 12 | |
 | N Data migration | ✅ | ✅ 13 | |
+| — Operations | ✅ | ✅ 9 | Health, readiness, crash-report scrubbing, rate limiting |
 
----
+**157 API tests + 10 kiosk tests, all green in CI.**
 
-## Blockers before a pilot
+## Pilot blockers
 
-Fixed:
+Closed:
 
-- JWT and webhook secrets no longer fall back to dev defaults; the server
-  refuses to boot in production on an unsafe config.
+- Secrets no longer fall back to dev defaults; production refuses to boot on an
+  unsafe config, a mock payment setup, or an OTP channel that cannot deliver.
 - OTP delivery exists (MSG91 / Twilio / Resend). Before this, nobody could have
-  logged in to production.
-- Rate limiting is gated on its own flag, so staging exercises the same path
-  production does.
-- Version control and CI exist.
+  logged in to production at all.
+- Ledger backups every 4h: consistent with `--oplog`, verified before being
+  trusted, encrypted, off-box, with a dead-man's-switch so a *missing* backup
+  alerts. A monthly drill restores into a scratch database and checks the money
+  adds up.
+- Monitoring: `/health` and `/health/ready`, Sentry with secrets scrubbed.
+- Redis-backed rate limiting, so the window is shared across instances.
+- Nginx with TLS, and a deploy that health-checks and rolls itself back.
+- Version control and CI across every package.
 
-Still open:
+Open:
 
-1. **Nginx + TLS + a deploy pipeline.** `infra/` has Docker Compose for Mongo
-   and Redis only.
-2. **Backups for the wallet ledger.** No automated dump, no restore drill. This
-   is the highest-consequence gap: the ledger *is* the money.
-3. **Monitoring.** No Sentry, no uptime checks, no alerting. Today a production
-   failure is discovered by a customer.
-4. **Redis is running but unused.** Rate limiting is an in-memory map, so it
-   breaks with more than one API instance.
-5. **Mongo is a single-node replica set.** Transactions work; high availability
-   does not.
-6. **The kiosk has never run on Windows.** Plan §11 requires real Windows
-   behaviour, not API simulation.
+1. **The kiosk has never run on Windows.** Plan §11 is explicit that kiosk
+   behaviour must be tested there, not simulated. This is the single largest
+   remaining risk to a pilot.
+2. **Mongo is a single node.** Transactions work; high availability does not.
+3. **No rehearsed incident runbook.** The tooling exists; nobody has used it
+   under pressure.
+4. **No load testing.** A zone with 40 PCs all heartbeating and ordering has
+   not been simulated.
 
----
+## What to do next
 
-## What to build next, in order
-
-1. **Owner dashboard (Next.js).** Unblocks plan module G, which is P0, and is
-   what an owner actually buys. 3–4 weeks.
-2. **Player PWA.** Module F. 3–4 weeks.
-3. **Kiosk on real Windows** — lock, heartbeat, Smart Sync client against the
-   policy endpoints that now exist. 2 weeks.
-4. **P6 infra**: Nginx/TLS, deploy pipeline, Sentry, uptime monitoring,
-   automated ledger backups with a tested restore. 2–3 weeks.
-5. **Payment-provider abstraction** so a second gateway does not mean a second
-   integration. 1 week.
-6. **Pilot zone**, two weeks minimum with real PCs, cash counter and real
+1. **Windows pilot hardware.** Install the kiosk on two real PCs, run Assigned
+   Access, verify lock/unlock/heartbeat/Smart Sync for a full day. 1 week.
+2. **Restore drill for real.** Run it against a production-sized dump and time
+   it, so the recovery window is a number and not a hope. 1 day.
+3. **Remaining client screens**: bookings and rewards in the player app,
+   announcements and booking management in the dashboard. 1–2 weeks.
+4. **Load test** a 40-PC zone. 2–3 days.
+5. **Pilot zone**, two weeks minimum with real PCs, a cash counter and real
    network drops, gated on zero open S0/S1.
-
-Roughly 12–16 weeks with work running in parallel; about 5 months serially.
-
----
 
 ## Ground rules worth keeping
 
@@ -101,6 +87,7 @@ Roughly 12–16 weeks with work running in parallel; about 5 months serially.
   not "verified", it is "someone once saw it work".
 - A test that only asserts HTTP 200 can pass while the feature is absent — the
   `scope=game` leaderboard did exactly that for two months.
-- Money paths are asserted against the ledger, never through a response body
-  alone.
+- Money paths are asserted against the ledger, never through a response body.
 - Tenant isolation gets a test per feature, not one test in total.
+- Run the thing. Two bugs in the SDK and API surfaced only in a real browser,
+  and one of them (`₹NaN` on every order line) would have shipped.

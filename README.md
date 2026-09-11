@@ -23,13 +23,28 @@ real transactions. Runs in CI on every push.
 
 ## Monorepo layout
 ```
-apps/api/        Node + Express + TypeScript backend monolith (MongoDB) — built
-apps/kiosk/      Electron PC client — scaffolded, not yet run on Windows
-apps/dashboard/  Next.js owner dashboard — NOT BUILT
-apps/player/     Next.js player PWA — NOT BUILT
-infra/           Docker Compose (Mongo + Redis). Nginx and deploy pipeline NOT BUILT
-.github/         CI: typecheck, test, build, image build
+apps/api/        Node + Express + TypeScript backend monolith (MongoDB)
+apps/dashboard/  Next.js owner/staff console — desktop and mobile, one RBAC
+apps/player/     Next.js player PWA — passport, wallet, play, shop, ranks
+apps/kiosk/      Electron PC client — lock, heartbeat, QR, Smart Sync
+packages/types/  Shared wire types
+packages/sdk/    Typed API client used by every client
+infra/           Docker Compose, nginx/TLS, backup + restore-drill + deploy
+.github/         CI: typecheck, tests, builds, production image
 ```
+
+## Run the whole thing
+
+```bash
+pnpm install
+pnpm dev:api:mem     # API + in-memory Mongo replica set → :4000
+pnpm dev:dashboard   # owner/staff console            → :3000
+pnpm dev:player      # player app                     → :3001
+```
+
+Then `POST /api/dev/seed` creates a zone, a PC and one staff member per role.
+Staff sign in with `9700000001`–`04`; any phone number creates a player. Outside
+production the API returns the OTP in the response, so both apps autofill it.
 
 ## Backend — run it (P1)
 

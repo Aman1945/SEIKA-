@@ -14,7 +14,8 @@
     "lint": "pnpm -r lint",
     "dev:dashboard": "pnpm --filter @seika/dashboard dev",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm --filter @seika/api test"
+    "test": "pnpm --filter @seika/api test && pnpm --filter @seika/kiosk test",
+    "dev:player": "pnpm --filter @seika/player dev"
   },
   "packageManager": "pnpm@11.10.0",
   "engines": {
