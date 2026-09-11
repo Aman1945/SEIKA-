@@ -1,80 +1,229 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<title>SEIKA — Locked</title>
+<meta charset="utf-8" />
+<title>SEIKA</title>
 <style>
-  html,body{margin:0;height:100%;background:radial-gradient(1200px 800px at 50% 30%,#161c2e,#0a0d15);
-    color:#e9edf7;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden}
-  .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center}
-  .logo{font-weight:800;letter-spacing:3px;font-size:34px}.logo span{color:#7c5cff}
-  .qr{background:#fff;padding:16px;border-radius:16px;width:260px;height:260px;display:flex;align-items:center;justify-content:center}
-  .qr img{width:228px;height:228px}
-  .hint{color:#8a93ab}.pc{font-size:14px;color:#28e0b0;letter-spacing:.1em;text-transform:uppercase}
-  .state{position:fixed;top:16px;right:20px;font-size:12px;color:#8a93ab}
-  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff5d6c}
-  .dot.on{background:#28e0b0;box-shadow:0 0 8px #28e0b0}
-  .tok{font-family:ui-monospace,monospace;font-size:11px;color:#5a6178;max-width:280px;word-break:break-all}
+  /*
+   * The lock screen. Read from across a room by someone deciding whether to
+   * sit down, so: one instruction, one code, and the machine's state — nothing
+   * else competing for attention.
+   */
+  :root {
+    --bg: #0a0c12;
+    --raised: #141926;
+    --border: #242c3d;
+    --text: #eef2fa;
+    --dim: #98a4bd;
+    --faint: #64708a;
+    --accent: #33e1c4;
+    --bad: #ff5f6d;
+    --warn: #ffb84f;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at 50% 0%, #1a1440 0%, var(--bg) 60%);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 28px;
+    /* Nothing on this screen is meant to be selected or dragged away. */
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+    overflow: hidden;
+  }
+
+  .brand {
+    font-size: 46px;
+    font-weight: 800;
+    letter-spacing: 8px;
+    background: linear-gradient(100deg, var(--accent), #7c5cff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .pc {
+    font-size: 15px;
+    color: var(--dim);
+    margin-top: -22px;
+  }
+
+  .qr-card {
+    background: #fff;
+    border-radius: 20px;
+    padding: 18px;
+    width: 320px;
+    height: 320px;
+    display: grid;
+    place-items: center;
+  }
+
+  .qr-card img { width: 100%; height: 100%; display: block; }
+
+  .qr-placeholder { color: #64708a; font-size: 14px; text-align: center; padding: 20px; }
+
+  .instruction { font-size: 21px; font-weight: 600; text-align: center; }
+
+  .sub {
+    font-size: 15px;
+    color: var(--dim);
+    text-align: center;
+    max-width: 420px;
+    line-height: 1.55;
+  }
+
+  /* The machine's own state lives at the bottom, where staff look for it. */
+  .status {
+    position: fixed;
+    bottom: 22px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+    gap: 22px;
+    font-size: 12px;
+    color: var(--faint);
+  }
+
+  .pill { display: flex; align-items: center; gap: 7px; }
+
+  .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--bad);
+  }
+
+  .dot[data-ok="true"] { background: var(--accent); }
+
+  .banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 13px;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+    display: none;
+  }
+
+  .banner[data-kind="fatal"] {
+    display: block;
+    background: color-mix(in srgb, var(--bad) 22%, var(--bg));
+    color: var(--bad);
+  }
+
+  .banner[data-kind="notice"] {
+    display: block;
+    background: color-mix(in srgb, var(--warn) 20%, var(--bg));
+    color: var(--warn);
+  }
+
+  .unlocked {
+    display: none;
+    text-align: center;
+  }
+
+  body[data-locked="false"] .locked-view { display: none; }
+  body[data-locked="false"] .unlocked { display: block; }
 </style>
-</head>
-<body>
-  <div class="state"><span class="dot" id="dot"></span> <span id="conn">connecting…</span></div>
-  <div class="wrap">
-    <div class="logo">SEIKA <span>OS</span></div>
-    <div class="pc" id="pcName">PC</div>
-    <div class="qr" id="qr"><span style="color:#333">QR</span></div>
-    <div class="hint">Scan with the SEIKA app to log in<br/><b>PC unlocks only after payment / booking authorization</b></div>
-    <div class="tok" id="tok"></div>
+
+<div class="banner" id="banner"></div>
+
+<div class="locked-view" style="display: contents">
+  <div class="brand">SEIKA</div>
+  <div class="pc" id="pcLabel">—</div>
+
+  <div class="qr-card">
+    <div id="qrHolder" class="qr-placeholder">Getting a code…</div>
   </div>
 
-<script src="../config.js"></script>
+  <div class="instruction">Scan this with the SEIKA app</div>
+  <div class="sub" id="reason">
+    Scanning tells us who you are. The PC unlocks once you choose how long to
+    play and that is paid for.
+  </div>
+</div>
+
+<div class="unlocked">
+  <div class="brand">Enjoy your session</div>
+  <div class="sub">This screen will return when your session ends.</div>
+</div>
+
+<div class="status">
+  <span class="pill"><span class="dot" id="netDot"></span><span id="netText">Connecting…</span></span>
+  <span class="pill"><span class="dot" id="beatDot"></span><span id="beatText">No heartbeat</span></span>
+  <span class="pill" id="codeAge">—</span>
+</div>
+
 <script>
-const C = window.SEIKA_CONFIG || {};
-const $ = id => document.getElementById(id);
-$('pcName').textContent = "PC " + (C.pcId ? C.pcId.slice(-4) : "??");
+  const $ = (id) => document.getElementById(id);
+  let qrExpiresAt = null;
 
-async function api(path, method="POST", body){
-  const r = await fetch(C.apiUrl+path,{method,headers:{'content-type':'application/json'},body:body?JSON.stringify(body):undefined});
-  return r.json();
-}
+  seika.getConfig().then((cfg) => {
+    $("pcLabel").textContent = `${cfg.zoneName ?? "SEIKA"} · PC ${String(cfg.pcId).slice(-6)}`;
+  });
 
-// --- QR: fetch a short-lived token, render as scannable code ---
-async function refreshQR(){
-  try{
-    const q = await api(`/api/pcs/${C.pcId}/qr`);
-    $('tok').textContent = q.token ? q.token.slice(0,24)+"…" : "";
-    // render QR image (CDN qrcode; bundle locally for offline LAN — see README)
-    const data = encodeURIComponent(q.token);
-    $('qr').innerHTML = `<img alt="QR" src="https://api.qrserver.com/v1/create-qr-code/?size=228x228&data=${data}"/>`;
-  }catch(e){ $('qr').innerHTML='<span style="color:#333">offline</span>'; }
-}
+  seika.onState(({ locked, reason }) => {
+    document.body.dataset.locked = String(locked);
+    if (reason) $("reason").textContent = reason;
+  });
 
-// --- Lock / unlock via Zone OS commands ---
-function lockScreen(){ document.body.style.display='flex'; window.seika?.setLocked(true); refreshQR(); }
-function unlockScreen(){ window.seika?.setLocked(false); } // main minimizes the kiosk → desktop usable
+  seika.onQr((payload) => {
+    const holder = $("qrHolder");
+    if (payload.error) {
+      holder.innerHTML = '<div class="qr-placeholder">No code — the PC cannot reach the zone server.</div>';
+      qrExpiresAt = null;
+      return;
+    }
+    const img = new Image();
+    img.src = payload.dataUrl;
+    img.alt = "Scan to attach to this PC";
+    holder.replaceChildren(img);
+    qrExpiresAt = Date.now() + (payload.expiresInSeconds ?? 60) * 1000;
+  });
 
-// --- Socket.IO (served by the API host) ---
-function connect(){
-  const s = document.createElement('script');
-  s.src = C.wsUrl + "/socket.io/socket.io.js";
-  s.onload = () => {
-    const socket = io(C.wsUrl, { transports:["websocket","polling"] });
-    socket.on("connect", () => { $('dot').classList.add('on'); $('conn').textContent="connected";
-      socket.emit("join:pc", { pcId: C.pcId, clientKey: C.clientKey }); });
-    socket.on("disconnect", () => { $('dot').classList.remove('on'); $('conn').textContent="reconnecting…"; });
-    socket.on("command", (m) => {
-      if(m.action==="unlock") unlockScreen();
-      else if(["lock","shutdown","restart"].includes(m.action)) lockScreen();
-    });
-  };
-  s.onerror = () => { $('conn').textContent="API unreachable"; };
-  document.body.appendChild(s);
-}
+  seika.onConnection(({ connected }) => {
+    $("netDot").dataset.ok = String(connected);
+    $("netText").textContent = connected ? "Connected" : "Reconnecting…";
+  });
 
-// heartbeat + QR rotation + boot
-setInterval(()=>api(`/api/pcs/${C.pcId}/heartbeat`,"POST",{clientKey:C.clientKey}).catch(()=>{}), 20000);
-setInterval(refreshQR, 55000);
-lockScreen(); connect();
+  seika.onHeartbeat(({ ok }) => {
+    $("beatDot").dataset.ok = String(ok);
+    $("beatText").textContent = ok ? "Reporting" : "Server unreachable";
+  });
+
+  seika.onFatal(({ message }) => {
+    const banner = $("banner");
+    banner.dataset.kind = "fatal";
+    banner.textContent = message;
+  });
+
+  // A visibly stale code is better than a code that silently stopped working:
+  // a player scanning an expired code just sees an error with no explanation.
+  setInterval(() => {
+    if (!qrExpiresAt) {
+      $("codeAge").textContent = "—";
+      return;
+    }
+    const left = Math.max(0, Math.round((qrExpiresAt - Date.now()) / 1000));
+    $("codeAge").textContent = left > 0 ? `Code refreshes in ${left}s` : "Refreshing code…";
+  }, 1000);
+
+  // Nothing on the lock screen is a normal web page: no context menu, no
+  // dragging, no keyboard shortcuts that could reach a browser affordance.
+  document.addEventListener("contextmenu", (e) => e.preventDefault());
+  document.addEventListener("dragstart", (e) => e.preventDefault());
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "F5" || (e.ctrlKey && ["r", "R", "p", "P", "s", "S"].includes(e.key))) {
+      e.preventDefault();
+    }
+  });
 </script>
-</body>
-</html>

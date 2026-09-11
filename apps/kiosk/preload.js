@@ -1,7 +1,39 @@
-// Safe bridge between the kiosk renderer and the main process.
+"use strict";
+
+/**
+ * The bridge between the lock screen and the main process.
+ *
+ * Deliberately narrow. The renderer can ask for state, show a QR, and drive
+ * Smart Sync for the player sitting at the PC — it cannot unlock anything and
+ * cannot touch the disk directly. Unlocking is the server's decision and the
+ * main process's action.
+ */
+
 const { contextBridge, ipcRenderer } = require("electron");
 
+const on = (channel) => (handler) => {
+  const listener = (_event, payload) => handler(payload);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+};
+
 contextBridge.exposeInMainWorld("seika", {
-  // renderer calls this to lock/unlock the physical PC
-  setLocked: (locked) => ipcRenderer.send("seika:lock-state", Boolean(locked)),
+  // State pushed from main.
+  onState: on("seika:state"),
+  onQr: on("seika:qr"),
+  onHeartbeat: on("seika:heartbeat"),
+  onConnection: on("seika:connection"),
+  onSession: on("seika:session"),
+  onOrder: on("seika:order"),
+  onFatal: on("seika:fatal"),
+
+  // Requests the renderer may make.
+  getConfig: () => ipcRenderer.invoke("seika:config"),
+  listGames: (playerToken) => ipcRenderer.invoke("seika:games", { playerToken }),
+  syncDown: (playerToken, game) => ipcRenderer.invoke("seika:sync-down", { playerToken, game }),
+  syncUp: (playerToken, game, baseVersion) =>
+    ipcRenderer.invoke("seika:sync-up", { playerToken, game, baseVersion }),
+
+  /** Lock only. There is no unlock here, by design. */
+  lock: () => ipcRenderer.send("seika:request-lock"),
 });

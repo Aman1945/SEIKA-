@@ -1,61 +1,396 @@
-// SEIKA PC Client — Electron main process.
-// Runs fullscreen kiosk on each gaming PC. Renderer handles QR + Socket.IO;
-// main controls the actual window lock and blocks escape keys.
-const { app, BrowserWindow, globalShortcut, ipcMain } = require("electron");
+"use strict";
+
+/**
+ * SEIKA PC Client — Electron main process.
+ *
+ * This process owns three things the renderer must not: the physical lock, the
+ * heartbeat, and the disk. The unlock decision itself is never made here — it
+ * arrives from the server, which is the whole point of the product's core rule.
+ */
+
+const { app, BrowserWindow, globalShortcut, ipcMain, powerSaveBlocker } = require("electron");
 const path = require("node:path");
+const fs = require("node:fs");
+
+const { io } = require("socket.io-client");
+const QRCode = require("qrcode");
+
+const { KioskApi } = require("./src/api");
+const smartsync = require("./src/smartsync");
+
+/** How often to tell the server this PC is alive (plan B8). */
+const HEARTBEAT_MS = 20_000;
+/** QR tokens live 60s server-side; refresh well inside that. */
+const QR_REFRESH_MS = 40_000;
 
 let win = null;
+let config = null;
+let api = null;
+let socket = null;
+let heartbeatTimer = null;
+let qrTimer = null;
+let powerBlocker = null;
+/** Locked until the server says otherwise. Never the other way round. */
+let locked = true;
+
+// ─── Config ──────────────────────────────────────────────────────────────────
+
+function loadConfig() {
+  const file = path.join(__dirname, "config.js");
+  if (!fs.existsSync(file)) {
+    throw new Error(
+      "config.js is missing. Copy config.example.js to config.js and fill in the pcId and clientKey from the zone console."
+    );
+  }
+  // config.js assigns to window.SEIKA_CONFIG so the same file can be loaded by
+  // the renderer; read it here with a tiny shim rather than keeping two files.
+  const sandbox = { window: {} };
+  const source = fs.readFileSync(file, "utf8");
+  new Function("window", source)(sandbox.window);
+  const cfg = sandbox.window.SEIKA_CONFIG;
+
+  for (const key of ["apiUrl", "pcId", "clientKey"]) {
+    if (!cfg?.[key] || String(cfg[key]).includes("PUT_")) {
+      throw new Error(`config.js is missing ${key}.`);
+    }
+  }
+  cfg.wsUrl = cfg.wsUrl || cfg.apiUrl;
+  return cfg;
+}
+
+// ─── Window and the physical lock ────────────────────────────────────────────
 
 function createWindow() {
   win = new BrowserWindow({
     fullscreen: true,
-    kiosk: true, // true kiosk mode — no window chrome, hard to escape
+    kiosk: true,
     alwaysOnTop: true,
     frame: false,
     closable: false,
     minimizable: false,
+    skipTaskbar: true,
+    backgroundColor: "#0a0c12",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      // The lock screen loads only local files; it has no reason to navigate.
+      sandbox: true,
     },
   });
+
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
   win.setAlwaysOnTop(true, "screen-saver");
+
+  // A kiosk that goes to sleep mid-session locks the player out of a PC they
+  // have paid for.
+  powerBlocker = powerSaveBlocker.start("prevent-display-sleep");
+
+  // Nothing in the lock screen should ever open a window or navigate away.
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+  win.webContents.on("will-navigate", (e) => e.preventDefault());
 }
 
-// Block common escape shortcuts. (Ctrl+Alt+Del needs a keyboard-filter driver
-// or Windows Assigned Access — documented in README.)
-function lockShortcuts() {
-  ["Alt+Tab", "Super", "Alt+F4", "Control+W", "Control+Shift+Esc", "Meta+Tab"].forEach((k) => {
-    try { globalShortcut.register(k, () => {}); } catch {}
+/** Shortcuts a player might use to get behind the lock screen. */
+const BLOCKED_SHORTCUTS = [
+  "Alt+Tab",
+  "Alt+Shift+Tab",
+  "Super",
+  "Super+D",
+  "Super+E",
+  "Super+R",
+  "Super+Tab",
+  "Alt+F4",
+  "Control+W",
+  "Control+Shift+Esc",
+  "Control+Escape",
+  "F11",
+];
+
+function blockShortcuts() {
+  for (const accel of BLOCKED_SHORTCUTS) {
+    try {
+      globalShortcut.register(accel, () => {});
+    } catch {
+      // Some accelerators are unavailable on some layouts; the hard lock
+      // (Assigned Access / shell replacement) is what production relies on.
+    }
+  }
+}
+
+/**
+ * Applies the lock state.
+ *
+ * Locked is the resting state: if anything is unclear — no config, no network,
+ * an unknown command — the PC stays locked. A kiosk that fails open is a kiosk
+ * that gives away free play.
+ */
+function applyLock(next, reason) {
+  locked = Boolean(next);
+  if (!win || win.isDestroyed()) return;
+
+  if (locked) {
+    win.setKiosk(true);
+    win.setAlwaysOnTop(true, "screen-saver");
+    win.show();
+    win.focus();
+    blockShortcuts();
+  } else {
+    // Unlocked: the player needs the desktop and their games, so the lock
+    // screen gets out of the way entirely.
+    globalShortcut.unregisterAll();
+    win.setAlwaysOnTop(false);
+    win.setKiosk(false);
+    win.minimize();
+  }
+
+  win.webContents.send("seika:state", { locked, reason: reason ?? null });
+}
+
+// ─── Server connection ───────────────────────────────────────────────────────
+
+function connectRealtime() {
+  socket = io(config.wsUrl, {
+    transports: ["websocket", "polling"],
+    reconnectionDelay: 1_000,
+    reconnectionDelayMax: 10_000,
   });
-}
 
-app.whenReady().then(() => {
-  createWindow();
-  lockShortcuts();
+  const join = () => {
+    socket.emit("join:pc", { pcId: config.pcId, clientKey: config.clientKey });
+    send("seika:connection", { connected: true });
+  };
 
-  // Renderer tells main whether the session is unlocked. When unlocked, drop
-  // kiosk so the player can use the PC/games; re-lock when session ends.
-  ipcMain.on("seika:lock-state", (_e, locked) => {
-    if (!win) return;
-    if (locked) {
-      win.setKiosk(true);
-      win.setAlwaysOnTop(true, "screen-saver");
-      win.show();
-      win.focus();
-      lockShortcuts();
-    } else {
-      // Unlock: release kiosk + shortcuts so the desktop/games are usable.
-      globalShortcut.unregisterAll();
-      win.setAlwaysOnTop(false);
-      win.setKiosk(false);
-      win.minimize();
+  socket.on("connect", join);
+  socket.io.on("reconnect", join);
+  socket.on("disconnect", () => send("seika:connection", { connected: false }));
+
+  socket.on("error:auth", (payload) => {
+    // A wrong clientKey means this PC is not who it claims to be. Stay locked
+    // and say so on screen — silently retrying hides a misconfigured install.
+    applyLock(true, "This PC is not paired with the zone. Ask staff to re-pair it.");
+    send("seika:fatal", { message: payload?.message ?? "PC authentication failed" });
+  });
+
+  /** The only message that may unlock this machine. */
+  socket.on("command", (payload) => {
+    const action = payload?.action;
+    switch (action) {
+      case "unlock":
+        applyLock(false, "Session authorized");
+        break;
+      case "lock":
+        applyLock(true, "Session ended");
+        break;
+      case "restart":
+        app.relaunch();
+        app.exit(0);
+        break;
+      case "shutdown":
+        app.exit(0);
+        break;
+      case "maintenance":
+        applyLock(true, "This PC is under maintenance");
+        break;
+      default:
+        // An unknown command is not a reason to change state.
+        break;
     }
   });
+
+  socket.on("session:update", (payload) => send("seika:session", payload));
+  socket.on("order:status", (payload) => send("seika:order", payload));
+}
+
+function send(channel, payload) {
+  if (win && !win.isDestroyed()) win.webContents.send(channel, payload);
+}
+
+/**
+ * The heartbeat. Its absence is what tells the dashboard a PC is offline, so it
+ * keeps running whether or not the socket is connected — the two fail
+ * independently.
+ */
+function startHeartbeat() {
+  const beat = async () => {
+    try {
+      await api.heartbeat();
+      send("seika:heartbeat", { ok: true, at: Date.now() });
+    } catch (err) {
+      send("seika:heartbeat", { ok: false, error: err.message });
+    }
+  };
+  void beat();
+  heartbeatTimer = setInterval(beat, HEARTBEAT_MS);
+}
+
+/**
+ * Keeps a current QR on screen.
+ *
+ * The code is rendered locally rather than fetched from an image service: a
+ * zone's network can be down while its LAN is fine, and a PC id should not be
+ * sent to a third party to be drawn.
+ */
+function startQrLoop() {
+  const refresh = async () => {
+    try {
+      const { token, expiresInSeconds } = await api.qrToken(config.staffToken);
+      const dataUrl = await QRCode.toDataURL(token, {
+        errorCorrectionLevel: "M",
+        margin: 2,
+        width: 320,
+        color: { dark: "#0a0c12", light: "#ffffff" },
+      });
+      send("seika:qr", { dataUrl, token, expiresInSeconds });
+    } catch (err) {
+      send("seika:qr", { error: err.message });
+    }
+  };
+  void refresh();
+  qrTimer = setInterval(refresh, QR_REFRESH_MS);
+}
+
+// ─── Smart Sync, driven by the renderer once a player is seated ──────────────
+
+/**
+ * Restores a player's settings before they play (plan K2).
+ *
+ * The order matters: ask the server what may sync, then read only that.
+ */
+async function syncDown(playerToken, game) {
+  const root = smartsync.gameRoot(config, game);
+  const stored = await api.downloadConfig(playerToken, game);
+  if (!stored.config?.exists || !stored.config.payload) {
+    return { restored: 0, version: stored.config?.version ?? 0 };
+  }
+
+  const bundle = JSON.parse(stored.config.payload);
+  const paths = Object.keys(bundle.files ?? {});
+  if (!paths.length) return { restored: 0, version: stored.config.version };
+
+  // Re-screen on the way in: a bundle stored under an older policy must not
+  // write somewhere the current policy forbids.
+  const screened = await api.screenPaths(playerToken, game, paths);
+  const written = await smartsync.apply(root, bundle, screened.allowed ?? []);
+
+  return {
+    restored: written.length,
+    refused: (screened.refused ?? []).length,
+    version: stored.config.version,
+  };
+}
+
+/** Saves the player's settings after they play (plan K3). */
+async function syncUp(playerToken, game, baseVersion) {
+  const root = smartsync.gameRoot(config, game);
+  const candidates = await smartsync.enumerate(root);
+  if (!candidates.length) return { uploaded: 0 };
+
+  const screened = await api.screenPaths(playerToken, game, candidates);
+  const allowed = screened.allowed ?? [];
+  if (!allowed.length) {
+    return { uploaded: 0, refused: (screened.refused ?? []).length };
+  }
+
+  const { files, bytes } = await smartsync.collect(root, allowed);
+  if (!Object.keys(files).length) return { uploaded: 0 };
+
+  const res = await api.uploadConfig(playerToken, game, {
+    payload: JSON.stringify({ files }),
+    paths: Object.keys(files),
+    baseVersion,
+  });
+
+  return {
+    uploaded: Object.keys(files).length,
+    bytes,
+    version: res.version,
+    refused: (screened.refused ?? []).length,
+  };
+}
+
+function registerIpc() {
+  ipcMain.handle("seika:sync-down", async (_e, { playerToken, game }) => {
+    try {
+      return { ok: true, ...(await syncDown(playerToken, game)) };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("seika:sync-up", async (_e, { playerToken, game, baseVersion }) => {
+    try {
+      return { ok: true, ...(await syncUp(playerToken, game, baseVersion ?? 0)) };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("seika:games", async (_e, { playerToken }) => {
+    try {
+      const res = await api.syncGames(playerToken);
+      // Only offer games this machine actually has installed.
+      return {
+        ok: true,
+        games: (res.games ?? []).filter((g) => smartsync.hasGame(config, g.game)),
+      };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  ipcMain.handle("seika:config", () => ({
+    pcId: config.pcId,
+    apiUrl: config.apiUrl,
+    zoneName: config.zoneName ?? null,
+  }));
+
+  // The renderer may ask to lock, never to unlock: only the server unlocks.
+  ipcMain.on("seika:request-lock", () => applyLock(true, "Locked by the PC"));
+}
+
+// ─── Lifecycle ───────────────────────────────────────────────────────────────
+
+app.whenReady().then(() => {
+  registerIpc();
+
+  try {
+    config = loadConfig();
+  } catch (err) {
+    // Misconfigured means locked, with the reason on screen. Anything else
+    // hands out free play on a PC nobody can account for.
+    createWindow();
+    applyLock(true, err.message);
+    send("seika:fatal", { message: err.message });
+    return;
+  }
+
+  api = new KioskApi(config);
+  createWindow();
+  applyLock(true, "Waiting for a player");
+  connectRealtime();
+  startHeartbeat();
+  startQrLoop();
 });
 
-// Never let the kiosk be closed by the user.
-app.on("window-all-closed", (e) => { e.preventDefault?.(); });
-app.on("will-quit", () => globalShortcut.unregisterAll());
+/** A player closing the lock screen must not leave the PC open. */
+app.on("window-all-closed", (e) => {
+  e.preventDefault?.();
+  if (app.isReady() && (!win || win.isDestroyed())) {
+    createWindow();
+    applyLock(true, "Restarted");
+  }
+});
+
+app.on("will-quit", () => {
+  globalShortcut.unregisterAll();
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  if (qrTimer) clearInterval(qrTimer);
+  if (powerBlocker !== null && powerSaveBlocker.isStarted(powerBlocker)) {
+    powerSaveBlocker.stop(powerBlocker);
+  }
+  socket?.disconnect();
+});
+
+// Exported for the unit tests, which exercise the pure parts without Electron.
+module.exports = { BLOCKED_SHORTCUTS, HEARTBEAT_MS, QR_REFRESH_MS };

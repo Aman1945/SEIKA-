@@ -37,6 +37,36 @@ jobs:
       - name: Build
         run: pnpm --filter @seika/api build
 
+  clients:
+    name: Clients — typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck shared packages and apps
+        run: pnpm -r typecheck
+
+      # The kiosk's disk-side Smart Sync logic runs without Electron or a
+      # display, which is the whole reason it lives outside the renderer.
+      - name: Kiosk tests
+        run: pnpm --filter @seika/kiosk test
+
+      - name: Build dashboard
+        run: pnpm --filter @seika/dashboard build
+
+      - name: Build player app
+        run: pnpm --filter @seika/player build
+
   docker:
     name: API — production image builds
     runs-on: ubuntu-latest
