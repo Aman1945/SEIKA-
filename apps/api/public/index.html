@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SEIKA Gaming Zone OS — Console</title>
+<style>
+  :root{--bg:#0b0e17;--panel:#141926;--panel2:#1c2333;--line:#2a3247;--ink:#e9edf7;--mut:#8a93ab;
+    --acc:#7c5cff;--acc2:#28e0b0;--warn:#ffb454;--bad:#ff5d6c;--ok:#28e0b0}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  header{display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--line);background:var(--panel)}
+  header .logo{font-weight:800;letter-spacing:1px}header .logo span{color:var(--acc)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--bad);display:inline-block}
+  .dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .wrap{max-width:1080px;margin:0 auto;padding:20px}
+  .tabs{display:flex;gap:8px;margin-bottom:16px}
+  .tab{padding:8px 16px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer;color:var(--mut)}
+  .tab.active{background:var(--acc);color:#fff;border-color:var(--acc)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h3{margin:0 0 12px;font-size:13px;text-transform:uppercase;letter-spacing:.08em;color:var(--acc2)}
+  button{background:var(--acc);color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600}
+  button.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  input{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;color:var(--ink);width:100%}
+  .row{display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap}
+  .pcgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:10px}
+  .pc{border:1px solid var(--line);border-radius:10px;padding:12px;text-align:center;background:var(--panel2)}
+  .pc .st{font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+  .pc.AVAILABLE .st{color:var(--ok)} .pc.OCCUPIED .st{color:var(--warn)} .pc.OFFLINE .st{color:var(--bad)}
+  .kpi{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed var(--line)}
+  .kpi b{color:var(--acc2)}
+  .lb div{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--line)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;background:var(--panel2);border:1px solid var(--line);font-size:12px}
+  .log{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#0a0d15;border:1px solid var(--line);border-radius:8px;padding:10px;height:150px;overflow:auto;white-space:pre-wrap}
+  .xpbar{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden;margin:6px 0}
+  .xpbar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+  .muted{color:var(--mut)} .hide{display:none}
+  h1{font-size:15px;margin:0}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">SEIKA <span>OS</span></div>
+  <span class="dot" id="conn"></span><span class="muted" id="conntxt">connecting…</span>
+  <div style="flex:1"></div>
+  <button class="ghost" onclick="seed()">⚡ Seed demo zone</button>
+</header>
+
+<div class="wrap">
+  <div class="tabs">
+    <div class="tab active" data-t="owner" onclick="tab('owner')">🖥️ Owner Dashboard</div>
+    <div class="tab" data-t="player" onclick="tab('player')">🎮 Player App</div>
+  </div>
+
+  <!-- OWNER -->
+  <div id="owner">
+    <div class="grid">
+      <div class="card">
+        <h3>PC Map (live)</h3>
+        <div class="pcgrid" id="pcmap"><span class="muted">Seed a zone to begin →</span></div>
+      </div>
+      <div class="card">
+        <h3>Today Overview</h3>
+        <div id="analytics"><span class="muted">—</span></div>
+        <div class="row" style="margin-top:12px">
+          <input id="prodName" placeholder="Product name" style="flex:2"/>
+          <input id="prodPrice" placeholder="₹" type="number" style="flex:1"/>
+          <button onclick="addProduct()">+ Product</button>
+        </div>
+      </div>
+      <div class="card">
+        <h3>👥 Staff</h3>
+        <div class="row"><input id="stName" placeholder="Name" style="flex:2"/><input id="stPhone" placeholder="Phone" style="flex:2"/>
+          <select id="stRole" style="background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px">
+            <option>CASHIER</option><option>BRANCH_MANAGER</option><option>TECHNICIAN</option><option>EVENT_MANAGER</option></select>
+          <button onclick="addStaff()">+ Staff</button></div>
+        <div class="row"><input id="loginStaffPhone" placeholder="Staff phone to log in as"/><button class="ghost" onclick="loginStaff()">🔑 Login as staff</button><button onclick="backToOwner()">↩ Back to Owner</button></div>
+        <div id="whoami" class="muted">Acting as: <b style="color:var(--acc2)">OWNER</b></div>
+        <div id="staffList" class="muted">—</div>
+      </div>
+      <div class="card">
+        <h3>🎟️ Vouchers & Packages</h3>
+        <div class="row"><input id="vCode" placeholder="Voucher code"/><input id="vMin" type="number" placeholder="free min"/><button onclick="addVoucher()">+ Voucher</button></div>
+        <div class="row"><input id="pkgPid" placeholder="Player ID"/><input id="pkgMin" type="number" placeholder="pkg min"/><button onclick="grantPkg()">Grant pkg</button></div>
+        <div id="opMsg" class="muted"></div>
+      </div>
+      <div class="card">
+        <h3>🍔 Order Queue</h3>
+        <div id="queue" class="muted">—</div>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <h3>🤖 AI Business Insights</h3>
+        <div id="ai"><span class="muted">—</span></div>
+      </div>
+    </div>
+  </div>
+  <!-- PLAYER -->
+  <div id="player" class="hide">
+    <div class="grid">
+      <div class="card">
+        <h3>SEIKA Passport</h3>
+        <div id="loginBox">
+          <div class="row"><input id="phone" placeholder="Phone e.g. 9876500000"/><button onclick="otpReq()">Get OTP</button></div>
+          <div class="row hide" id="otpRow"><input id="otp" placeholder="OTP (auto-filled in dev)"/><button onclick="otpVerify()">Login</button></div>
+        </div>
+        <div id="passport" class="hide"></div>
+      </div>
+      <div class="card">
+        <h3>Play a Session</h3>
+        <div id="playFlow"><span class="muted">Login first →</span></div>
+      </div>
+      <div class="card">
+        <h3>🏆 Leaderboard (zone)</h3>
+        <div class="lb" id="lb"><span class="muted">—</span></div>
+      </div>
+      <div class="card">
+        <h3>🛒 Shop</h3>
+        <div id="shop"><span class="muted">—</span></div>
+      </div>
+      <div class="card">
+        <h3>📅 Bookings</h3>
+        <div class="row"><button onclick="book(1)">Book +1hr slot</button><button class="ghost" onclick="book(2)">Book +2hr</button></div>
+        <div id="bookings" class="muted">—</div>
+      </div>
+      <div class="card">
+        <h3>🔔 Notifications <span class="pill" id="unread">0</span></h3>
+        <div class="row"><button class="ghost" onclick="readAll()">Mark all read</button></div>
+        <div id="notifs" class="muted">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px"><h3>Activity Log</h3><div class="log" id="log"></div></div>
+</div>
+
+<script>
+const S = { owner:null, zoneId:null, pcId:null, player:null, playerId:null, sessionId:null };
+const $ = id => document.getElementById(id);
+function log(m,cls){ const l=$('log'); l.textContent = `» ${m}\n`+l.textContent; }
+function tab(t){ document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x.dataset.t===t));
+  $('owner').classList.toggle('hide',t!=='owner'); $('player').classList.toggle('hide',t!=='player'); }
+
+async function api(method, path, body, token){
+  const r = await fetch('/api'+path, {method, headers:{'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})}, body: body?JSON.stringify(body):undefined});
+  const j = await r.json().catch(()=>({})); if(!r.ok){ log(`✖ ${path} → ${j.error?.message||r.status}`); throw j; } return j;
+}
+
+// health
+(async()=>{ try{ const h=await (await fetch('/health')).json(); $('conn').classList.add('on'); $('conntxt').textContent='API '+h.version+' · db '+h.db; }catch{ $('conntxt').textContent='API offline'; } })();
+
+async function seed(){
+  const s = await api('POST','/dev/seed'); S.owner=s.ownerAccessToken; S.ownerToken=s.ownerAccessToken; S.zoneId=s.zoneId; S.pcId=s.pc.id;
+  log('✔ Seeded zone '+s.zoneId.slice(-6)+' · PC '+s.pc.id.slice(-6));
+  (s.staff||[]).forEach(st=>log('  staff ready → '+st.role+' : '+st.phone));
+  const w=$('whoami'); if(w) w.innerHTML='Acting as: <b style="color:var(--acc2)">OWNER</b>';
+  refreshOwner(); loadShop();
+}
+async function refreshOwner(){
+  if(!S.owner) return;
+  const m = await api('GET','/pcs/map',null,S.owner);
+  $('pcmap').innerHTML = m.pcs.map(p=>`<div class="pc ${p.status}"><b>${p.pcNumber}</b><div class="st">${p.status}</div>${p.activeSession?'<div class="pill">in use</div>':''}</div>`).join('');
+  const o = (await api('GET','/analytics/overview',null,S.owner)).overview;
+  $('analytics').innerHTML = `
+    <div class="kpi"><span>Revenue today</span><b>₹${o.revenueToday}</b></div>
+    <div class="kpi"><span>Top-ups today</span><b>₹${o.topupsToday}</b></div>
+    <div class="kpi"><span>Active sessions</span><b>${o.activeSessions}</b></div>
+    <div class="kpi"><span>PCs (avail/occ/total)</span><b>${o.pcs.available}/${o.pcs.occupied}/${o.pcs.total}</b></div>
+    <div class="kpi"><span>Occupancy</span><b>${o.occupancyPct}%</b></div>
+    <div class="kpi"><span>Pending orders</span><b>${o.ordersPending}</b></div>`;
+  try{
+    const ai=await api('GET','/ai/insights',null,S.owner);
+    const ico={info:'ℹ️',opportunity:'💡',warning:'⚠️'};
+    $('ai').innerHTML = `<div class="row"><span class="pill">pricing hint: ${ai.dynamicPricingHint}</span></div>`+
+      ai.insights.map(i=>`<div class="kpi"><span>${ico[i.kind]} <b style="color:var(--ink)">${i.title}</b> — <span class="muted">${i.detail}</span></span></div>`).join('');
+  }catch{}
+}
+async function addProduct(){
+  if(!S.owner) return log('seed first'); const name=$('prodName').value, price=+$('prodPrice').value;
+  if(!name||!price) return; await api('POST','/shop/products',{name,price,stockQty:20},S.owner);
+  log('✔ product added: '+name); $('prodName').value=''; $('prodPrice').value=''; loadShop();
+}
+
+async function otpReq(){ const id=$('phone').value; if(!id) return; const r=await api('POST','/auth/otp/request',{identifier:id});
+  $('otpRow').classList.remove('hide'); if(r.devCode){ $('otp').value=r.devCode; log('dev OTP '+r.devCode);} }
+async function otpVerify(){ const id=$('phone').value, code=$('otp').value;
+  const v=await api('POST','/auth/otp/verify',{identifier:id,code}); S.player=v.accessToken;
+  const me=await api('GET','/auth/me',null,S.player); S.playerId=me.auth.sub; log('✔ player logged in '+S.playerId.slice(-6));
+  $('loginBox').classList.add('hide'); $('passport').classList.remove('hide'); refreshPlayer(); }
+
+async function refreshPlayer(){
+  if(!S.player) return;
+  const p=(await api('GET','/players/me/passport',null,S.player)).passport;
+  $('passport').innerHTML = `
+    <div class="row"><b>${p.username}</b><span class="pill">Lv ${p.level} · ${p.rank}</span></div>
+    <div class="xpbar"><i style="width:${Math.round(p.xp.progress*100)}%"></i></div>
+    <div class="muted">${p.xp.total} XP · next at ${p.xp.nextLevelAt}</div>
+    <div class="kpi"><span>💰 Wallet</span><b>₹${p.wallet.balance}</b></div>
+    <div class="kpi"><span>🪙 SEIKA Coins</span><b>${p.coins}</b></div>
+    <div class="row"><input id="topupAmt" type="number" placeholder="₹ top-up (cash by owner)"/><button onclick="topup()">Top-up</button></div>`;
+  renderPlay(); loadLeaderboard(); loadBookings(); loadNotifs();
+}
+async function loadNotifs(){
+  if(!S.player) return;
+  try{ const n=await api('GET','/notifications',null,S.player);
+    $('unread').textContent=n.unread;
+    $('notifs').innerHTML = n.notifications.length? n.notifications.map(x=>
+      `<div class="kpi"><span>${x.read?'':'🔵 '}<b style="color:var(--ink)">${x.title}</b> <span class="muted">${x.body||''}</span></span></div>`).join('')
+      : '<span class="muted">no notifications</span>';
+  }catch{}
+}
+async function readAll(){ if(!S.player) return; await api('POST','/notifications/read-all',null,S.player); loadNotifs(); }
+async function topup(){ const amt=+$('topupAmt').value; if(!amt||!S.owner) return log('need amount + seeded owner');
+  await api('POST','/wallet/topup',{playerId:S.playerId,amount:amt},S.owner); log('✔ topped up ₹'+amt); refreshPlayer(); refreshOwner(); }
+
+function renderPlay(){
+  const st = S.sessionId ? '' : '';
+  $('playFlow').innerHTML = `
+    <div class="muted">Simulates: QR scan → authorize → start → end</div>
+    <div class="row">
+      <button onclick="scanStart()">▶ Start session (auto)</button>
+      <button class="ghost" onclick="endSess()" ${S.sessionId?'':'disabled'}>■ End session</button>
+    </div>
+    <div id="sessInfo" class="muted"></div>`;
+}
+async function scanStart(){
+  if(!S.player||!S.pcId) return log('login + seed first');
+  // 1) QR token (kiosk shows it) 2) attach 3) authorize WALLET 4) start
+  const qr=await api('POST',`/pcs/${S.pcId}/qr`);
+  const att=await api('POST','/sessions/attach',{qrToken:qr.token},S.player); S.sessionId=att.sessionId;
+  log('QR scanned → session '+S.sessionId.slice(-6)+' (PC still LOCKED)');
+  const az=await api('POST',`/sessions/${S.sessionId}/authorize`,{source:'WALLET'},S.player);
+  if(!az.ok){ log('✖ authorize failed: '+az.reason+' → top-up wallet!'); S.sessionId=null; refreshPlayer(); return; }
+  await api('POST',`/sessions/${S.sessionId}/start`,null,S.player);
+  log('✔ authorized + PC UNLOCKED · timer running');
+  $('sessInfo') && ($('sessInfo').textContent='Session ACTIVE — click End to stop & earn XP');
+  renderPlay(); refreshOwner();
+}
+async function endSess(){
+  if(!S.sessionId) return; const r=await api('POST',`/sessions/${S.sessionId}/end`,null,S.player);
+  log(`✔ session ended · ${r.validMinutes} min · ₹${r.cost} · +${r.xp.gained} XP`+(r.xp.leveledUp?` · LEVEL UP → ${r.xp.level}!`:''));
+  S.sessionId=null; refreshPlayer(); refreshOwner();
+}
+async function loadLeaderboard(){
+  const lb=(await api('GET',`/leaderboard?scope=zone&period=all-time&zoneId=${S.zoneId}`)).leaderboard;
+  $('lb').innerHTML = lb.length? lb.map(r=>`<div><span>#${r.position} ${r.username}</span><b>${r.xp} XP</b></div>`).join('') : '<span class="muted">No sessions yet</span>';
+}
+async function loadShop(){
+  if(!S.zoneId) return;
+  const ps=(await api('GET',`/shop/products?zoneId=${S.zoneId}`,null,S.player||S.owner)).products;
+  $('shop').innerHTML = ps.length? ps.map(p=>`<div class="kpi"><span>${p.name} <span class="muted">(${p.stockQty})</span></span><span>₹${p.price} <button onclick="order('${p._id}')">Buy</button></span></div>`).join('') : '<span class="muted">No products — add from owner panel</span>';
+}
+async function order(pid){
+  if(!S.player) return log('login as player to order');
+  const r=await api('POST','/shop/orders',{zoneId:S.zoneId,items:[{productId:pid,qty:1}],paymentSource:'WALLET'},S.player);
+  log('✔ ordered · ₹'+r.total); refreshPlayer(); loadShop(); refreshOwner();
+}
+// --- Player bookings ---
+async function book(hours){
+  if(!S.player||!S.pcId) return log('login + seed first');
+  const start=new Date(Date.now()+ (loadBookings._offset||1)*3600e3);
+  const end=new Date(start.getTime()+hours*3600e3);
+  loadBookings._offset=(loadBookings._offset||1)+hours+1; // avoid overlap on repeat
+  try{ const r=await api('POST','/bookings',{pcId:S.pcId,slotStart:start.toISOString(),slotEnd:end.toISOString()},S.player);
+    log('✔ booked ₹'+r.amount+' ('+hours+'hr)'); loadBookings(); refreshPlayer(); }
+  catch(e){ log('✖ booking: '+(e.error?.message||'failed')); }
+}
+async function loadBookings(){
+  if(!S.player) return;
+  try{ const r=await api('GET','/bookings/mine',null,S.player);
+    $('bookings').innerHTML = r.bookings.length? r.bookings.map(b=>{
+      const amt=parseFloat(b.amount.$numberDecimal||b.amount||0);
+      const pay=b.paymentStatus==='unpaid'?`<button onclick="payBk('${b._id}')">Pay ₹${amt}</button>`:`<span class="pill">${b.paymentStatus}</span>`;
+      return `<div class="kpi"><span>${new Date(b.slotStart).toLocaleTimeString()} <span class="pill">${b.status}</span></span>${pay}</div>`;
+    }).join('') : '<span class="muted">no bookings</span>';
+  }catch{}
+}
+async function payBk(id){ try{ await api('POST',`/bookings/${id}/pay`,null,S.player); log('✔ booking paid'); loadBookings(); refreshPlayer(); }catch(e){ log('✖ pay: '+(e.error?.message||'failed')); } }
+
+// --- Owner operations ---
+async function addStaff(){
+  if(!S.owner) return log('seed first');
+  const name=$('stName').value, phone=$('stPhone').value, role=$('stRole').value;
+  if(!name||!phone) return;
+  const r=await api('POST','/staff',{name,phone,role},S.owner);
+  log('✔ staff added: '+name+' ('+r.role+')'); $('stName').value='';$('stPhone').value=''; loadStaff();
+}
+async function loginStaff(){
+  const phone=$('loginStaffPhone').value.trim(); if(!phone) return log('enter staff phone');
+  try{
+    const rq=await api('POST','/auth/otp/request',{identifier:phone,audience:'staff'});
+    const v=await api('POST','/auth/otp/verify',{identifier:phone,code:rq.devCode,audience:'staff'},null);
+    S.owner=v.accessToken; // dashboard now runs with THIS staff's permissions
+    const me=await api('GET','/auth/me',null,S.owner);
+    $('whoami').innerHTML='Acting as: <b style="color:var(--warn)">'+(me.auth.role||'STAFF')+'</b> (RBAC live — restricted actions will 403)';
+    log('🔑 now acting as '+me.auth.role); refreshOwner();
+  }catch(e){ log('✖ staff login: '+(e.error?.message||'failed (create the staff first)')); }
+}
+function backToOwner(){
+  if(!S.ownerToken) return log('seed first');
+  S.owner=S.ownerToken;
+  $('whoami').innerHTML='Acting as: <b style="color:var(--acc2)">OWNER</b>';
+  log('↩ back to OWNER'); refreshOwner();
+}
+async function loadStaff(){
+  if(!S.owner) return;
+  try{ const r=await api('GET','/staff',null,S.owner);
+    $('staffList').innerHTML = r.staff.map(s=>`<div class="kpi"><span>${s.name}</span><span class="pill">${s.role}</span></div>`).join('')||'<span class="muted">no staff</span>';
+  }catch{}
+}
+async function addVoucher(){
+  if(!S.owner) return; const code=$('vCode').value, value=+$('vMin').value; if(!code||!value) return;
+  await api('POST','/shop/vouchers',{code,value,maxRedemptions:100},S.owner);
+  $('opMsg').textContent='✔ voucher '+code.toUpperCase()+' created ('+value+' free min)'; $('vCode').value='';$('vMin').value='';
+}
+async function grantPkg(){
+  if(!S.owner) return; const playerId=$('pkgPid').value.trim(), minutes=+$('pkgMin').value; if(!playerId||!minutes) return;
+  try{ const r=await api('POST','/shop/packages/grant',{playerId,minutes},S.owner);
+    $('opMsg').textContent='✔ granted '+r.minutesRemaining+' min package'; }catch(e){ $('opMsg').textContent='✖ '+(e.error?.message||'failed'); }
+}
+async function loadQueue(){
+  if(!S.owner) return;
+  try{ const r=await api('GET','/shop/orders/queue',null,S.owner);
+    $('queue').innerHTML = r.orders.length? r.orders.map(o=>{
+      const next={received:'preparing',preparing:'ready',ready:'delivered'}[o.status];
+      return `<div class="kpi"><span>₹${o.total} <span class="pill">${o.status}</span></span>`+
+        (next?`<button onclick="advOrder('${o._id}','${next}')">→ ${next}</button>`:'')+`</div>`;
+    }).join('') : '<span class="muted">no pending orders</span>';
+  }catch{}
+}
+async function advOrder(id,status){ await api('PATCH',`/shop/orders/${id}/status`,{status},S.owner); log('order → '+status); loadQueue(); refreshOwner(); }
+
+// hook owner-ops into the owner refresh
+const _refreshOwner = refreshOwner;
+refreshOwner = async function(){ await _refreshOwner(); loadStaff(); loadQueue(); };
+
+setInterval(()=>{ if(S.owner) refreshOwner(); }, 5000);
+</script>
+</body>
+</html>

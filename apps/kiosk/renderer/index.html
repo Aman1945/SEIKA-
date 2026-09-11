@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>SEIKA — Locked</title>
+<style>
+  html,body{margin:0;height:100%;background:radial-gradient(1200px 800px at 50% 30%,#161c2e,#0a0d15);
+    color:#e9edf7;font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;overflow:hidden}
+  .wrap{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center}
+  .logo{font-weight:800;letter-spacing:3px;font-size:34px}.logo span{color:#7c5cff}
+  .qr{background:#fff;padding:16px;border-radius:16px;width:260px;height:260px;display:flex;align-items:center;justify-content:center}
+  .qr img{width:228px;height:228px}
+  .hint{color:#8a93ab}.pc{font-size:14px;color:#28e0b0;letter-spacing:.1em;text-transform:uppercase}
+  .state{position:fixed;top:16px;right:20px;font-size:12px;color:#8a93ab}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff5d6c}
+  .dot.on{background:#28e0b0;box-shadow:0 0 8px #28e0b0}
+  .tok{font-family:ui-monospace,monospace;font-size:11px;color:#5a6178;max-width:280px;word-break:break-all}
+</style>
+</head>
+<body>
+  <div class="state"><span class="dot" id="dot"></span> <span id="conn">connecting…</span></div>
+  <div class="wrap">
+    <div class="logo">SEIKA <span>OS</span></div>
+    <div class="pc" id="pcName">PC</div>
+    <div class="qr" id="qr"><span style="color:#333">QR</span></div>
+    <div class="hint">Scan with the SEIKA app to log in<br/><b>PC unlocks only after payment / booking authorization</b></div>
+    <div class="tok" id="tok"></div>
+  </div>
+
+<script src="../config.js"></script>
+<script>
+const C = window.SEIKA_CONFIG || {};
+const $ = id => document.getElementById(id);
+$('pcName').textContent = "PC " + (C.pcId ? C.pcId.slice(-4) : "??");
+
+async function api(path, method="POST", body){
+  const r = await fetch(C.apiUrl+path,{method,headers:{'content-type':'application/json'},body:body?JSON.stringify(body):undefined});
+  return r.json();
+}
+
+// --- QR: fetch a short-lived token, render as scannable code ---
+async function refreshQR(){
+  try{
+    const q = await api(`/api/pcs/${C.pcId}/qr`);
+    $('tok').textContent = q.token ? q.token.slice(0,24)+"…" : "";
+    // render QR image (CDN qrcode; bundle locally for offline LAN — see README)
+    const data = encodeURIComponent(q.token);
+    $('qr').innerHTML = `<img alt="QR" src="https://api.qrserver.com/v1/create-qr-code/?size=228x228&data=${data}"/>`;
+  }catch(e){ $('qr').innerHTML='<span style="color:#333">offline</span>'; }
+}
+
+// --- Lock / unlock via Zone OS commands ---
+function lockScreen(){ document.body.style.display='flex'; window.seika?.setLocked(true); refreshQR(); }
+function unlockScreen(){ window.seika?.setLocked(false); } // main minimizes the kiosk → desktop usable
+
+// --- Socket.IO (served by the API host) ---
+function connect(){
+  const s = document.createElement('script');
+  s.src = C.wsUrl + "/socket.io/socket.io.js";
+  s.onload = () => {
+    const socket = io(C.wsUrl, { transports:["websocket","polling"] });
+    socket.on("connect", () => { $('dot').classList.add('on'); $('conn').textContent="connected";
+      socket.emit("join:pc", { pcId: C.pcId, clientKey: C.clientKey }); });
+    socket.on("disconnect", () => { $('dot').classList.remove('on'); $('conn').textContent="reconnecting…"; });
+    socket.on("command", (m) => {
+      if(m.action==="unlock") unlockScreen();
+      else if(["lock","shutdown","restart"].includes(m.action)) lockScreen();
+    });
+  };
+  s.onerror = () => { $('conn').textContent="API unreachable"; };
+  document.body.appendChild(s);
+}
+
+// heartbeat + QR rotation + boot
+setInterval(()=>api(`/api/pcs/${C.pcId}/heartbeat`,"POST",{clientKey:C.clientKey}).catch(()=>{}), 20000);
+setInterval(refreshQR, 55000);
+lockScreen(); connect();
+</script>
+</body>
+</html>

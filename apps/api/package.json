@@ -1,0 +1,39 @@
+{
+  "name": "@seika/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SEIKA backend monolith (Node + Express + TypeScript + MongoDB)",
+  "main": "dist/server.js",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "dev:mem": "SEIKA_USE_MEMORY_DB=true tsx watch src/server.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.7.0",
+    "morgan": "^1.10.0",
+    "socket.io": "^4.8.0",
+    "swagger-ui-express": "^5.0.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/morgan": "^1.9.9",
+    "@types/node": "^22.7.4",
+    "@types/swagger-ui-express": "^4.1.6",
+    "mongodb-memory-server": "^10.1.2",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  }
+}

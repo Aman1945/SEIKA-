@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "seika-api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@seika/api", "dev:mem"],
+      "port": 4000
+    }
+  ]
+}

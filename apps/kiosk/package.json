@@ -1,0 +1,15 @@
+{
+  "name": "@seika/kiosk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SEIKA PC Client — Windows kiosk lock for gaming PCs",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^32.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}

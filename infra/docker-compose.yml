@@ -1,0 +1,34 @@
+# SEIKA local/prod infra — MongoDB (single-node replica set for transactions) + Redis
+# Usage: docker compose -f infra/docker-compose.yml up -d
+# The replica set is required because SEIKA uses multi-document ACID transactions
+# for wallet + session + booking integrity.
+
+services:
+  mongo:
+    image: mongo:7
+    container_name: seika-mongo
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      - seika-mongo-data:/data/db
+    healthcheck:
+      test: >
+        mongosh --quiet --eval "try { rs.status().ok } catch (e) {
+          rs.initiate({_id:'rs0',members:[{_id:0,host:'localhost:27017'}]}).ok }"
+      interval: 10s
+      start_period: 20s
+      timeout: 10s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: seika-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - seika-redis-data:/data
+
+volumes:
+  seika-mongo-data:
+  seika-redis-data:
