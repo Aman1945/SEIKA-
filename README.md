@@ -5,19 +5,30 @@ Enterprise-grade Gaming Zone Operating System — owner dashboard, player PWA, P
 See [`TECHNICAL_BUILD_PLAN.md`](./TECHNICAL_BUILD_PLAN.md) for the full architecture and phase plan.
 
 ## Documentation
+- [`docs/STATUS.md`](docs/STATUS.md) — **current status, weighted honestly; start here**
 - [`docs/PRODUCT_WORKING.md`](docs/PRODUCT_WORKING.md) — how the whole product works, flows, rules
 - [`docs/ROLES_AND_ACCESS.md`](docs/ROLES_AND_ACCESS.md) — every role + full permission matrix
-- [`docs/TEST_CASES.md`](docs/TEST_CASES.md) — 40 test cases across 11 areas
+- [`docs/TEST_CASES.md`](docs/TEST_CASES.md) — automated coverage against the testing plan (136 cases)
 - [`TECHNICAL_BUILD_PLAN.md`](TECHNICAL_BUILD_PLAN.md) — architecture + phase plan
-- [`BUILD_REPORT.md`](BUILD_REPORT.md) — what was built + verification
+- [`BUILD_REPORT.md`](BUILD_REPORT.md) — the original July build report (headline figures revised)
+
+## Tests
+
+```bash
+pnpm --filter @seika/api test
+```
+
+Spins up its own in-memory MongoDB replica set, so the money paths run inside
+real transactions. Runs in CI on every push.
 
 ## Monorepo layout
 ```
-apps/api/        Node + Express + TypeScript backend monolith (MongoDB)
-apps/dashboard/  Next.js owner dashboard        (coming P2+)
-apps/player/     Next.js player PWA             (coming P4+)
-apps/kiosk/      Electron PC client             (coming P2)
-infra/           Docker Compose, Nginx, CI/CD
+apps/api/        Node + Express + TypeScript backend monolith (MongoDB) — built
+apps/kiosk/      Electron PC client — scaffolded, not yet run on Windows
+apps/dashboard/  Next.js owner dashboard — NOT BUILT
+apps/player/     Next.js player PWA — NOT BUILT
+infra/           Docker Compose (Mongo + Redis). Nginx and deploy pipeline NOT BUILT
+.github/         CI: typecheck, test, build, image build
 ```
 
 ## Backend — run it (P1)

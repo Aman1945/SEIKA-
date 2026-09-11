@@ -1,10 +1,22 @@
 # SEIKA Gaming Zone OS — Build Report
 
-**Date:** 08 July 2026
+**Date:** 08 July 2026 · **revised** 11 September 2026
 **Stack:** MongoDB · Node.js + Express + TypeScript (monolith) · Socket.IO · thin web client · Electron kiosk
-**Status:** Backend ~99% · Web console ~95% · Overall product ~86%
 
-> All backend logic lives in Node (as required). Frontends are thin clients that only `fetch` the API. Everything below was built **and verified end-to-end** on an in-memory MongoDB replica set (Docker not available on the build machine).
+> **Read [`docs/STATUS.md`](docs/STATUS.md) for the current, weighted status.**
+>
+> This report's original headline — "overall product ~86%" — counted backend
+> logic and treated documentation as a deliverable. It did not account for two
+> unbuilt client apps, zero automated tests, or unbuilt production infra. The
+> honest figure for a shippable product was closer to 50% at the time, and is
+> ~60% now. The module list below is accurate about *what exists*; treat its
+> "verified" column as "was observed working once", not as a reproducible gate.
+>
+> Since this was written, the testing plan of 26 August 2026 added four modules
+> (cross-zone events, Smart Sync, data migration, deeper analytics/export) which
+> have now been built, and the whole plan has been encoded as 136 automated
+> tests. Those tests found seven real defects in code listed as verified here —
+> see [`docs/TEST_CASES.md`](docs/TEST_CASES.md).
 
 ---
 

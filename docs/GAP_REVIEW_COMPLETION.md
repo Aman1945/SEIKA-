@@ -4,6 +4,13 @@ Response to **SEIKA Developer Gap Review Response**. Each requested item below i
 
 Status: **✅ built + tested** · **🟡 partial (base built, refinement pending)** · **📋 planned (documented; affects schema/API — build next)**
 
+> **Superseded, 11 September 2026.** Every 📋 item in this report except the
+> payment-provider abstraction has since been built and tested, and the two 🟡
+> items were closed. The leaderboard row below was also overstated: the `game`
+> scope accepted the parameter and ignored it, because sessions carried no game.
+> Current status: [`docs/STATUS.md`](STATUS.md). Coverage:
+> [`docs/TEST_CASES.md`](TEST_CASES.md).
+
 ---
 
 ## Critical gaps
@@ -11,16 +18,16 @@ Status: **✅ built + tested** · **🟡 partial (base built, refinement pending
 | Pri | Gap | Status | Where |
 |---|---|---|---|
 | P0 | Player top-up + **session-hour selection** (1h/2h/3h/Open Hour) | ✅ | `session.engine.ts`, `Session` model (`sessionMode`, `selectedMinutes`, `pricingSnapshot`, `endReason`); tests L1–L4 |
-| P0 | **Owner/admin mobile login** | 🟡 | Responsive dashboard + same RBAC works on phone today; dedicated app modes planned |
-| P0 | **Seated-zone shop** on mobile + PC | 🟡 | Shop zone-scoped + live order queue built; seat/session binding refinement planned |
-| P1 | **Cross-zone events** | 📋 | Single-zone tournaments built; owner-to-owner network planned |
-| P1 | **Leaderboard hierarchy** (Global/Region/Country/City/Zone/Game) | ✅ | `leaderboard.service.ts`; tests L6–L7 |
-| P1 | **Smart Sync** | 📋 | Belongs in kiosk; documented |
-| P1 | **Payment gateway abstraction** | 📋 | Razorpay + idempotent webhook built; `PaymentProvider` interface planned |
-| P2 | **Data migration wizard** | 📋 | Documented (CSV → map → validate → import → OTP-activate) |
+| P0 | **Owner/admin mobile login** | 🟡 | API + RBAC done and tested; the dashboard app itself is still unbuilt |
+| P0 | **Seated-zone shop** on mobile + PC | ✅ | Orders now bind to the live session's zone + PC, derived server-side; `h-shop-seated-zone.test.ts` |
+| P1 | **Cross-zone events** | ✅ | Connections, co-hosting, per-zone registration/check-in, shared bracket, verification, disputes, split; `j-crosszone.test.ts` incl. the §8 two-zone flow |
+| P1 | **Leaderboard hierarchy** (Global/Region/Country/City/Zone/Game) | ✅ | Game scope is real now — `Session.game` added; period-bounded geo boards too; `i-xp-leaderboard.test.ts` |
+| P1 | **Smart Sync** | ✅ | Policy, whitelist, anti-cheat exclusions and versioned storage server-side; `k-smartsync.test.ts`. Kiosk client pending |
+| P1 | **Payment gateway abstraction** | 📋 | Still the one open item: Razorpay only |
+| P2 | **Data migration wizard** | ✅ | CSV → map → validate → commit, opening balance as a ledger entry, transactional rollback; `n-migration.test.ts` |
 
 ## Approved directions — all kept
-QR ≠ unlock ✅ · XP only from valid minutes ✅ · wallet ≠ coins, append-only ledger ✅ · full RBAC ✅ · POS base ✅ · testing mindset ✅ (53 cases now).
+QR ≠ unlock ✅ · XP only from valid minutes ✅ · wallet ≠ coins, append-only ledger ✅ · full RBAC ✅ · POS base ✅ · testing ✅ — **136 automated cases** now run in CI, replacing the 53 manual ones this report counted.
 
 ## Session-hour module — required fields (all added)
 | Requested field | Added as |
@@ -30,7 +37,7 @@ QR ≠ unlock ✅ · XP only from valid minutes ✅ · wallet ≠ coins, append-
 | `pricingSnapshot` (rate frozen at start) | ✅ `Session.pricingSnapshot` |
 | `minimumStartBalance` (Open Hour) | ✅ in `pricingSnapshot.minimumStartBalance` |
 | `sessionEndReason` | ✅ `Session.endReason` |
-| WalletLedger types (TOPUP/HOLD/DEBIT/REFUND…) | 🟡 have TOPUP/DEDUCT/REFUND/BOOKING/SHOP/PACKAGE; HOLD + split TOPUP_ONLINE/CASH planned |
+| WalletLedger types (TOPUP/HOLD/DEBIT/REFUND…) | 🟡 TOPUP/DEDUCT/REFUND/ADJUST/BOOKING/SHOP/PACKAGE + OPENING_BALANCE (migration); HOLD and split TOPUP_ONLINE/CASH still planned |
 
 ## Docs updated (reviewer checklist)
 - ✅ `PRODUCT_WORKING.md` — new §11b covers all 7 gap modules with status.
