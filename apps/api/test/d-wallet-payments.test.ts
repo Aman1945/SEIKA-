@@ -17,7 +17,7 @@ import { Order } from "../src/models/Order.js";
 import { Player } from "../src/models/Player.js";
 import { CoinLedger } from "../src/models/CoinLedger.js";
 import { getWalletBalance } from "../src/modules/wallet/wallet.service.js";
-import { signBodyForTest } from "../src/modules/payments/razorpay.service.js";
+import { activeProvider, signForTest } from "../src/modules/payments/payment.service.js";
 
 /**
  * Module D — wallet, payments, refunds and the ledger (plan §7.D). Every case
@@ -93,16 +93,19 @@ describe("D. Wallet, payments, refunds and ledger", () => {
       .send({ amount: 500, zoneId: zone.zoneId });
     expect(order.status).toBe(201);
 
+    // Without real keys the mock provider is active, and it speaks its own
+    // (simpler) payload shape — the point of the abstraction.
     const body = JSON.stringify({
       event: "payment.captured",
-      payload: { payment: { entity: { id: "pay_test_1", order_id: order.body.orderId } } },
+      orderId: order.body.orderId,
+      paymentId: "pay_test_1",
     });
-    const signature = signBodyForTest(body);
+    const signature = signForTest(activeProvider().name, body);
 
     const send = () =>
       anon()
         .post("/api/payments/webhook")
-        .set("x-razorpay-signature", signature)
+        .set("x-seika-signature", signature)
         .set("content-type", "application/json")
         .send(body);
 
@@ -128,12 +131,13 @@ describe("D. Wallet, payments, refunds and ledger", () => {
 
     const body = JSON.stringify({
       event: "payment.captured",
-      payload: { payment: { entity: { id: "pay_forged", order_id: order.body.orderId } } },
+      orderId: order.body.orderId,
+      paymentId: "pay_forged",
     });
 
     const res = await anon()
       .post("/api/payments/webhook")
-      .set("x-razorpay-signature", "deadbeef")
+      .set("x-seika-signature", "deadbeef")
       .set("content-type", "application/json")
       .send(body);
 
