@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { asyncHandler } from "../../common/asyncHandler.js";
 import { badRequest, forbidden } from "../../common/errors.js";
@@ -11,6 +11,16 @@ import {
 } from "./booking.service.js";
 import { Booking } from "../../models/Booking.js";
 import { audit } from "../audit/audit.service.js";
+
+/** Actor identity used by the booking authorization guard. */
+function actorFrom(req: Request) {
+  return {
+    id: req.auth!.sub,
+    type: req.auth!.typ as "player" | "staff",
+    role: req.auth!.role,
+    zoneId: req.tenantZoneId,
+  };
+}
 
 export const bookingRouter = Router();
 bookingRouter.use(requireAuth);
@@ -42,7 +52,7 @@ bookingRouter.post(
 bookingRouter.post(
   "/:id/pay",
   asyncHandler(async (req, res) => {
-    const booking = await payBookingFromWallet(req.params.id, req.auth!.sub);
+    const booking = await payBookingFromWallet(req.params.id, actorFrom(req));
     res.json({ ok: true, bookingId: String(booking._id), paymentStatus: booking.paymentStatus });
   })
 );
@@ -65,7 +75,7 @@ bookingRouter.post(
 bookingRouter.post(
   "/:id/cancel",
   asyncHandler(async (req, res) => {
-    const booking = await cancelBooking(req.params.id, req.auth!.sub);
+    const booking = await cancelBooking(req.params.id, actorFrom(req));
     await audit({
       actorId: req.auth!.sub,
       actorType: req.auth!.typ,
