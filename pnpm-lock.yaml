@@ -142,6 +142,40 @@ importers:
         specifier: ^25.0.0
         version: 25.1.8(electron-builder-squirrel-windows@25.1.8)
 
+  apps/player:
+    dependencies:
+      '@seika/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@seika/types':
+        specifier: workspace:*
+        version: link:../../packages/types
+      next:
+        specifier: ^15.1.0
+        version: 15.5.25(@opentelemetry/api@1.9.1)(@types/node@22.20.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      react:
+        specifier: ^19.0.0
+        version: 19.3.0
+      react-dom:
+        specifier: ^19.0.0
+        version: 19.3.0(react@19.3.0)
+      socket.io-client:
+        specifier: ^4.8.1
+        version: 4.8.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.7.4
+        version: 22.20.0
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.3.0(@types/react@19.3.0)
+      typescript:
+        specifier: ^5.6.2
+        version: 5.9.3
+
   packages/sdk:
     dependencies:
       '@seika/types':

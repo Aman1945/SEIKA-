@@ -62,7 +62,9 @@ export const env = {
   jwtRefreshTtl: opt("JWT_REFRESH_TTL", "30d"),
   otpTtlSeconds: parseInt(opt("OTP_TTL_SECONDS", "300"), 10),
 
-  corsOrigins: opt("CORS_ORIGINS", "http://localhost:3000")
+  // Both clients by default: the dashboard on 3000 and the player app on 3001.
+  // Production must name its real origins — boot fails if localhost survives.
+  corsOrigins: opt("CORS_ORIGINS", "http://localhost:3000,http://localhost:3001")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),

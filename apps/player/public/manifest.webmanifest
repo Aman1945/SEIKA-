@@ -1,0 +1,13 @@
+{
+  "name": "SEIKA",
+  "short_name": "SEIKA",
+  "description": "Your gaming passport — wallet, sessions, XP and rewards",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0c12",
+  "theme_color": "#0a0c12",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
