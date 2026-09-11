@@ -1,15 +1,24 @@
-# SEIKA local/prod infra — MongoDB (single-node replica set for transactions) + Redis
-# Usage: docker compose -f infra/docker-compose.yml up -d
-# The replica set is required because SEIKA uses multi-document ACID transactions
-# for wallet + session + booking integrity.
+# SEIKA infra.
+#
+# Local / single-box production: MongoDB (single-node replica set, required for
+# transactions), Redis, and the API.
+#
+#   docker compose -f infra/docker-compose.yml up -d              # data stores only
+#   docker compose -f infra/docker-compose.yml --profile app up -d # + the API
+#
+# TLS is terminated by nginx on the host (see infra/nginx/), not in here — it
+# owns the certificates and certbot's renewal hook.
 
 services:
   mongo:
     image: mongo:7
     container_name: seika-mongo
+    restart: unless-stopped
     command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
-      - "27017:27017"
+      # Bound to loopback: the database must never be reachable from the
+      # internet, and the API talks to it over the compose network anyway.
+      - "127.0.0.1:27017:27017"
     volumes:
       - seika-mongo-data:/data/db
     healthcheck:
@@ -24,10 +33,50 @@ services:
   redis:
     image: redis:7-alpine
     container_name: seika-redis
+    restart: unless-stopped
+    # Persist, so a restart does not drop every rate-limit window at once.
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - seika-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    profiles: ["app"]
+    build:
+      context: ../apps/api
+      dockerfile: Dockerfile
+    container_name: seika-api
+    restart: unless-stopped
+    env_file:
+      - ../apps/api/.env
+    environment:
+      NODE_ENV: production
+      # Inside the compose network the hostnames are the service names. The
+      # directConnection flag matters: the replica set advertises itself as
+      # "localhost", which a client in another container cannot resolve.
+      MONGO_URI: mongodb://mongo:27017/seika?replicaSet=rs0&directConnection=true
+      REDIS_URL: redis://redis:6379
+    ports:
+      - "127.0.0.1:4000:4000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Readiness, not liveness: an instance that cannot reach Mongo should not
+      # be declared healthy just because the process is running.
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      start_period: 20s
+      timeout: 5s
+      retries: 4
 
 volumes:
   seika-mongo-data:

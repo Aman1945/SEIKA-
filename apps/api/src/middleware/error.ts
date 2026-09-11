@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { ApiError } from "../common/errors.js";
 import { logger } from "../config/logger.js";
+import { captureError } from "../config/observability.js";
 
 export function notFoundHandler(req: Request, res: Response) {
   res.status(404).json({ error: { code: "NOT_FOUND", message: `No route ${req.method} ${req.path}` } });
@@ -8,7 +9,7 @@ export function notFoundHandler(req: Request, res: Response) {
 
 export function errorHandler(
   err: unknown,
-  _req: Request,
+  req: Request,
   res: Response,
   _next: NextFunction
 ) {
@@ -37,6 +38,15 @@ export function errorHandler(
     res.status(409).json({ error: { code: "DUPLICATE", message: "Resource already exists" } });
     return;
   }
-  logger.error("Unhandled error", { err: err instanceof Error ? err.stack : String(err) });
+  // Anything reaching here is a bug, not a client mistake, so it is reported.
+  logger.error("Unhandled error", {
+    err: err instanceof Error ? err.stack : String(err),
+    route: `${req.method} ${req.path}`,
+  });
+  captureError(err, {
+    route: `${req.method} ${req.path}`,
+    actorId: req.auth?.sub,
+    actorType: req.auth?.typ,
+  });
   res.status(500).json({ error: { code: "INTERNAL", message: "Internal server error" } });
 }

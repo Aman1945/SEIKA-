@@ -45,6 +45,17 @@ export const env = {
   mongoUri: opt("MONGO_URI", "mongodb://localhost:27017/seika?replicaSet=rs0"),
   useMemoryDb: process.env.SEIKA_USE_MEMORY_DB === "true",
 
+  /**
+   * Optional. When set, state that must be shared between API instances
+   * (rate-limit windows) lives here instead of in one process's memory.
+   */
+  redisUrl: opt("REDIS_URL", ""),
+
+  /** Error reporting. Absent = no reporting; production warns about that. */
+  sentryDsn: opt("SENTRY_DSN", ""),
+  /** Git sha or tag, so a crash report names the build it came from. */
+  release: opt("SEIKA_RELEASE", "dev"),
+
   jwtAccessSecret: secret("JWT_ACCESS_SECRET", "dev-access-secret"),
   jwtRefreshSecret: secret("JWT_REFRESH_SECRET", "dev-refresh-secret"),
   jwtAccessTtl: opt("JWT_ACCESS_TTL", "15m"),
@@ -134,6 +145,18 @@ export function assertProductionConfig(): void {
   if (env.corsOrigins.some((o) => o.includes("localhost"))) {
     problems.push("CORS_ORIGINS still contains localhost.");
   }
+
+  // Warnings, not refusals: these degrade operations rather than making the
+  // deploy unsafe, and a zone should still be able to open its doors.
+  const warnings: string[] = [];
+  if (!env.sentryDsn) warnings.push("SENTRY_DSN is not set — errors will not be reported.");
+  if (!env.redisUrl) {
+    warnings.push(
+      "REDIS_URL is not set — rate limiting is per-process, so it is ineffective behind a load balancer."
+    );
+  }
+  if (env.release === "dev") warnings.push("SEIKA_RELEASE is 'dev' — crash reports will not name a build.");
+  for (const w of warnings) console.warn(JSON.stringify({ level: "warn", msg: w }));
 
   if (problems.length) {
     throw new Error(
