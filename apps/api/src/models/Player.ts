@@ -9,8 +9,13 @@ const playerSchema = new Schema(
     googleId: { type: String, unique: true, sparse: true },
     otpVerified: { type: Boolean, default: false },
     avatar: String,
+    /** Public display handle, shown on leaderboards and the PC login screen. */
+    gamerTag: { type: String, trim: true },
     country: String,
     city: String,
+    /** Region is derived from country so geo leaderboards can group by it. */
+    region: String,
+    favoriteGames: { type: [String], default: [] },
     status: { type: String, default: "active" },
     // progression snapshot (source of truth = ledgers/session history)
     xpTotal: { type: Number, default: 0 },

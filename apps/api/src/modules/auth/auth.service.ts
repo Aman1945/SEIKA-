@@ -18,7 +18,13 @@ import {
   verifyRefreshToken,
   type Subject,
 } from "../../common/jwt.js";
-import { badRequest, unauthorized, tooManyRequests } from "../../common/errors.js";
+import {
+  badRequest,
+  unauthorized,
+  tooManyRequests,
+  serviceUnavailable,
+} from "../../common/errors.js";
+import { senderFor } from "../../integrations/otp/otp.sender.js";
 
 const MAX_OTP_ATTEMPTS = 5;
 
@@ -26,7 +32,12 @@ function isEmail(v: string) {
   return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);
 }
 
-/** Step 1: create + "send" an OTP. In dev the code is logged (no SMS provider yet). */
+/**
+ * Step 1: create + send an OTP through the configured provider (MSG91 / Twilio
+ * / Resend; `console` in dev). A delivery failure is surfaced to the caller —
+ * silently returning 200 would leave the player waiting for a code that will
+ * never arrive.
+ */
 export async function requestOtp(identifier: string, audience: Subject = "player") {
   if (!identifier) throw badRequest("identifier (phone or email) required");
   const channel = isEmail(identifier) ? "email" : "phone";
@@ -44,10 +55,32 @@ export async function requestOtp(identifier: string, audience: Subject = "player
     expiresAt,
   });
 
-  // TODO(P5): send via Twilio/Resend/WhatsApp. For now, dev-log.
-  if (!env.isProd) logger.info("DEV OTP issued", { identifier, code });
+  const sender = senderFor(channel);
+  const delivery = await sender.send({
+    identifier,
+    channel,
+    code,
+    ttlSeconds: env.otpTtlSeconds,
+  });
 
-  return { channel, expiresInSeconds: env.otpTtlSeconds, devCode: env.isProd ? undefined : code };
+  if (!delivery.delivered) {
+    // Drop the challenge so a retry issues a fresh code rather than colliding
+    // with an undeliverable one.
+    await OtpChallenge.deleteMany({ identifier });
+    logger.error("OTP delivery failed", {
+      identifier,
+      provider: delivery.provider,
+      error: delivery.error,
+    });
+    throw serviceUnavailable("Could not send the OTP right now. Please try again.");
+  }
+
+  return {
+    channel,
+    provider: delivery.provider,
+    expiresInSeconds: env.otpTtlSeconds,
+    devCode: env.isProd ? undefined : code,
+  };
 }
 
 /** Step 2: verify OTP → find/create subject → issue tokens. */

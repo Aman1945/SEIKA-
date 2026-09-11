@@ -22,10 +22,18 @@ const sessionSchema = new Schema(
   { timestamps: true }
 );
 
-// Guard: only one non-terminal session per PC at a time (enforced in service too).
+/**
+ * Guard: at most ONE live session per PC.
+ *
+ * The key is `pcId` alone. An earlier version keyed {pcId, status}, which made
+ * the *pair* unique and therefore allowed one live session per status — a PC
+ * could hold a PENDING_AUTH and an ACTIVE session at the same time, so a second
+ * player could attach to (and be billed on) a PC someone was already playing.
+ */
 sessionSchema.index(
-  { pcId: 1, status: 1 },
+  { pcId: 1 },
   {
+    name: "one_live_session_per_pc",
     unique: true,
     partialFilterExpression: {
       status: { $in: ["PENDING_AUTH", "AUTHORIZED", "ACTIVE", "PAUSED", "LOW_BALANCE"] },

@@ -1,11 +1,15 @@
 import http from "node:http";
 import { createApp } from "./app.js";
 import { connectDb, disconnectDb } from "./config/db.js";
-import { env } from "./config/env.js";
+import { env, assertProductionConfig } from "./config/env.js";
 import { logger } from "./config/logger.js";
 import { initRealtime } from "./modules/realtime/io.js";
 
 async function main() {
+  // Crash loudly on an unsafe/incomplete production config rather than
+  // booting with dev secrets or an OTP channel that cannot deliver.
+  assertProductionConfig();
+
   await connectDb();
 
   const app = createApp();

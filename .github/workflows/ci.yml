@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  api:
+    name: API — typecheck, lint, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm --filter @seika/api typecheck
+
+      # Tests spin up their own in-memory MongoDB replica set — no service
+      # container needed, so money-path transactions are exercised for real.
+      - name: Test
+        run: pnpm --filter @seika/api test
+        env:
+          NODE_ENV: test
+
+      - name: Build
+        run: pnpm --filter @seika/api build
+
+  docker:
+    name: API — production image builds
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -f apps/api/Dockerfile -t seika-api:ci apps/api

@@ -20,7 +20,9 @@ setInterval(() => {
 
 export function rateLimit(opts: { windowMs: number; max: number; key?: string }) {
   return (req: Request, _res: Response, next: NextFunction) => {
-    if (!env.isProd) return next(); // don't throttle during local dev/testing
+    // Gated on its own flag, not NODE_ENV, so staging exercises the same path
+    // production does — testing-plan case M7 has to be verifiable off-prod.
+    if (!env.rateLimitEnabled) return next();
     const ip = req.ip || req.socket.remoteAddress || "unknown";
     const bucketKey = `${opts.key ?? req.path}:${ip}`;
     const now = Date.now();
@@ -36,4 +38,9 @@ export function rateLimit(opts: { windowMs: number; max: number; key?: string })
     b.count += 1;
     next();
   };
+}
+
+/** Test seam: clears all buckets so cases don't leak limits into each other. */
+export function resetRateLimits(): void {
+  store.clear();
 }

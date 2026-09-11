@@ -19,3 +19,7 @@ export const notFound = (msg = "Not found") => new ApiError(404, "NOT_FOUND", ms
 export const conflict = (msg: string) => new ApiError(409, "CONFLICT", msg);
 export const tooManyRequests = (msg = "Too many requests") =>
   new ApiError(429, "TOO_MANY_REQUESTS", msg);
+export const paymentRequired = (code: string, msg: string) =>
+  new ApiError(402, code, msg);
+export const serviceUnavailable = (msg = "Service unavailable") =>
+  new ApiError(503, "SERVICE_UNAVAILABLE", msg);

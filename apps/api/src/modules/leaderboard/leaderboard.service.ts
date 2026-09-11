@@ -16,6 +16,15 @@ function countriesInRegion(region?: string): string[] {
   return region ? REGION[region] ?? [] : [];
 }
 
+/** Reverse lookup — used when a player sets their country on their profile. */
+export function regionForCountry(country?: string): string | undefined {
+  if (!country) return undefined;
+  for (const [region, countries] of Object.entries(REGION)) {
+    if (countries.includes(country)) return region;
+  }
+  return undefined;
+}
+
 function windowStart(period: Period): Date | null {
   if (period === "all-time") return null;
   const days = period === "weekly" ? 7 : 30;

@@ -9,6 +9,15 @@ import { getWalletBalance } from "../wallet/wallet.service.js";
 /** Minimum minutes a player must be able to afford to start a session. */
 const MIN_START_MINUTES = 15;
 
+/** Session states that occupy a PC. Must match the unique index on Session. */
+export const LIVE_SESSION_STATUSES = [
+  "PENDING_AUTH",
+  "AUTHORIZED",
+  "ACTIVE",
+  "PAUSED",
+  "LOW_BALANCE",
+] as const;
+
 export interface AuthorizeResult {
   authorized: boolean;
   reason?: string;
@@ -140,6 +149,22 @@ export async function attachPlayer(pcId: string, playerId: string) {
   if (!pc) throw notFound("PC not found");
   if (pc.status === "MAINTENANCE" || pc.status === "OFFLINE")
     throw conflict(`PC is ${pc.status}`);
+
+  // Explicit pre-check so the common case returns a clear 409 rather than
+  // relying on a duplicate-key error. The unique index below is still the
+  // authority under concurrency.
+  const live = await Session.findOne({
+    pcId: pc._id,
+    status: { $in: LIVE_SESSION_STATUSES },
+  });
+  if (live) {
+    // Same player re-scanning the same PC gets their session back, so a re-scan
+    // after a flaky network is not a dead end. Anyone else is refused.
+    if (String(live.playerId) !== String(playerId)) {
+      throw conflict("PC already has an active session");
+    }
+    return live;
+  }
 
   try {
     const session = await Session.create({
