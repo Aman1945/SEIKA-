@@ -20,3 +20,4 @@ export { OtpChallenge } from "./OtpChallenge.js";
 export { RefreshToken } from "./RefreshToken.js";
 export { MigrationImport } from "./MigrationImport.js";
 export { ZoneConnection } from "./ZoneConnection.js";
+export { GameSyncProfile, PlayerGameConfig } from "./GameSyncProfile.js";

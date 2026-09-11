@@ -30,6 +30,7 @@ import { auditRouter } from "./modules/audit/audit.routes.js";
 import { announcementRouter } from "./modules/announcement/announcement.routes.js";
 import { tournamentRouter } from "./modules/tournament/tournament.routes.js";
 import { crossZoneRouter } from "./modules/crosszone/crosszone.routes.js";
+import { smartSyncRouter } from "./modules/smartsync/smartsync.routes.js";
 import { migrationRouter } from "./modules/migration/migration.routes.js";
 import { devRouter } from "./modules/dev/dev.routes.js";
 
@@ -44,8 +45,13 @@ export function createApp() {
   app.use(helmet({ contentSecurityPolicy: false }));
   app.use(cors({ origin: env.corsOrigins, credentials: true }));
   // Capture raw body so payment webhooks can verify HMAC signatures.
+  //
+  // The limit is well above express's 100kb default because two endpoints post
+  // real payloads: a migration CSV (up to 5MB of player rows) and a Smart Sync
+  // config bundle. At the default they would have failed for any real file.
   app.use(
     express.json({
+      limit: "6mb",
       verify: (req, _res, buf) => {
         (req as unknown as { rawBody?: Buffer }).rawBody = buf;
       },
@@ -80,6 +86,7 @@ export function createApp() {
   app.use("/api/announcements", announcementRouter);
   app.use("/api/tournaments", tournamentRouter);
   app.use("/api/crosszone", crossZoneRouter);
+  app.use("/api/smartsync", smartSyncRouter);
   app.use("/api/migration", migrationRouter);
   if (!env.isProd) app.use("/api/dev", devRouter);
 
