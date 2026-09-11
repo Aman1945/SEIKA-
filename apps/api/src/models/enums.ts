@@ -40,6 +40,12 @@ export const WalletTxnType = [
   "PACKAGE",
   "SHOP",
   "BOOKING",
+  /**
+   * Balance carried over from a previous system during migration. A distinct
+   * type so an imported balance is always visibly an import, never mistaken
+   * for money SEIKA actually took (plan N4).
+   */
+  "OPENING_BALANCE",
 ] as const;
 export type WalletTxnType = (typeof WalletTxnType)[number];
 

@@ -18,3 +18,4 @@ export { StaffUser } from "./StaffUser.js";
 export { AuditLog } from "./AuditLog.js";
 export { OtpChallenge } from "./OtpChallenge.js";
 export { RefreshToken } from "./RefreshToken.js";
+export { MigrationImport } from "./MigrationImport.js";

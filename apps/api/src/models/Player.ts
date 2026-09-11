@@ -17,6 +17,15 @@ const playerSchema = new Schema(
     region: String,
     favoriteGames: { type: [String], default: [] },
     status: { type: String, default: "active" },
+    /** Provenance for players brought over from a previous system. */
+    importedFrom: String,
+    importedAt: Date,
+    /** Stats carried over from the old tool — reference only, never scored. */
+    legacy: {
+      membership: String,
+      playedHours: Number,
+      sessionsCount: Number,
+    },
     // progression snapshot (source of truth = ledgers/session history)
     xpTotal: { type: Number, default: 0 },
     level: { type: Number, default: 1 },
