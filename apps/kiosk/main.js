@@ -11,6 +11,7 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, powerSaveBlocker } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const crypto = require("node:crypto");
 
 const { io } = require("socket.io-client");
 const QRCode = require("qrcode");
@@ -91,7 +92,15 @@ function createWindow() {
   win.webContents.on("will-navigate", (e) => e.preventDefault());
 }
 
-/** Shortcuts a player might use to get behind the lock screen. */
+/**
+ * Shortcuts a player might use to get behind the lock screen.
+ *
+ * This list is the *second* line of defence, not the first. Electron's
+ * globalShortcut cannot hold the Windows key or Ctrl+Alt+Del, so the real lock
+ * is the Windows policy and keyboard work done by
+ * `windows/Install-SeikaKiosk.ps1`. These catch what is left while the kiosk
+ * has focus.
+ */
 const BLOCKED_SHORTCUTS = [
   "Alt+Tab",
   "Alt+Shift+Tab",
@@ -99,11 +108,18 @@ const BLOCKED_SHORTCUTS = [
   "Super+D",
   "Super+E",
   "Super+R",
+  "Super+L",
+  "Super+M",
   "Super+Tab",
+  "Super+Up",
+  "Super+Down",
   "Alt+F4",
+  "Alt+Escape",
+  "Alt+Space",
   "Control+W",
   "Control+Shift+Esc",
   "Control+Escape",
+  "Control+Alt+Delete", // never fires — registered so the intent is on record
   "F11",
 ];
 
@@ -112,10 +128,37 @@ function blockShortcuts() {
     try {
       globalShortcut.register(accel, () => {});
     } catch {
-      // Some accelerators are unavailable on some layouts; the hard lock
-      // (Assigned Access / shell replacement) is what production relies on.
+      // Some accelerators are unavailable on some layouts. The Windows-level
+      // lockdown is what production relies on, not this.
     }
   }
+}
+
+/**
+ * Keeps the lock screen in front.
+ *
+ * A game launcher, an updater or a driver popup can take focus and leave a
+ * usable sliver of desktop behind the overlay. On Windows that is the common
+ * way a lock screen is beaten without any real effort, so while locked the
+ * window re-asserts itself on a timer.
+ */
+let assertTimer = null;
+
+function startAssertingLock() {
+  stopAssertingLock();
+  assertTimer = setInterval(() => {
+    if (!locked || !win || win.isDestroyed()) return;
+    if (!win.isVisible()) win.show();
+    if (!win.isFocused()) {
+      win.setAlwaysOnTop(true, "screen-saver");
+      win.focus();
+    }
+  }, 1_000);
+}
+
+function stopAssertingLock() {
+  if (assertTimer) clearInterval(assertTimer);
+  assertTimer = null;
 }
 
 /**
@@ -135,13 +178,19 @@ function applyLock(next, reason) {
     win.show();
     win.focus();
     blockShortcuts();
+    startAssertingLock();
   } else {
     // Unlocked: the player needs the desktop and their games, so the lock
-    // screen gets out of the way entirely.
+    // screen gets out of the way entirely. Hidden rather than minimised, so
+    // there is no taskbar entry inviting a click.
+    stopAssertingLock();
     globalShortcut.unregisterAll();
     win.setAlwaysOnTop(false);
     win.setKiosk(false);
-    win.minimize();
+    win.hide();
+    // The staff escape stays registered while unlocked too, so a member of
+    // staff can always take a PC back for maintenance.
+    registerStaffEscape();
   }
 
   win.webContents.send("seika:state", { locked, reason: reason ?? null });
@@ -216,6 +265,8 @@ function startHeartbeat() {
     try {
       await api.heartbeat();
       send("seika:heartbeat", { ok: true, at: Date.now() });
+      // Connectivity is back: anything the escape owed the server goes now.
+      await flushEscapeReports();
     } catch (err) {
       send("seika:heartbeat", { ok: false, error: err.message });
     }
@@ -248,6 +299,102 @@ function startQrLoop() {
   };
   void refresh();
   qrTimer = setInterval(refresh, QR_REFRESH_MS);
+}
+
+// ─── Staff escape ────────────────────────────────────────────────────────────
+
+/**
+ * A local way for staff to take a PC back.
+ *
+ * This is a backdoor, deliberately. Without one, a zone whose network drops has
+ * every PC locked with no way in — the kiosk cannot ask the server for
+ * permission precisely when it most needs to. That failure mode is worse than
+ * the risk this creates, as long as the risk is bounded:
+ *
+ *   * The code is set per zone in config.js, never shipped in the build.
+ *   * Only its hash is kept in memory; the plain code is compared and dropped.
+ *   * Every use is reported to the server — immediately when online, and on the
+ *     next successful heartbeat when it was used during an outage. Staff cannot
+ *     use it quietly.
+ *   * It unlocks for maintenance. It does not start a session, bill anyone, or
+ *     award XP, so it cannot be used to hand out free play that looks paid.
+ *
+ * Rotate it when staff leave. The README says so in as many words.
+ */
+const ESCAPE_ACCELERATOR = "Control+Alt+Shift+U";
+
+/** Uses that happened while offline and still owe the server a report. */
+let pendingEscapeReports = [];
+
+function hashCode(value) {
+  return crypto.createHash("sha256").update(String(value), "utf8").digest("hex");
+}
+
+function registerStaffEscape() {
+  if (!config?.staffEscapeCodeHash && !config?.staffEscapeCode) return;
+  try {
+    globalShortcut.register(ESCAPE_ACCELERATOR, () => {
+      send("seika:escape-prompt", {});
+      // The prompt only matters if the player can see it.
+      if (win && !win.isDestroyed()) {
+        win.show();
+        win.focus();
+      }
+    });
+  } catch {
+    // If the accelerator cannot be registered the PC is still operable from
+    // the console; this is a convenience, not the only route.
+  }
+}
+
+/** Checks a code typed on the lock screen and unlocks if it matches. */
+function attemptStaffEscape(code) {
+  const expected = config?.staffEscapeCodeHash ?? (config?.staffEscapeCode ? hashCode(config.staffEscapeCode) : null);
+  if (!expected) return { ok: false, reason: "No staff code is configured on this PC" };
+
+  const supplied = hashCode(String(code ?? "").trim());
+  // Constant-time compare: the codes are short, and a timing oracle on a
+  // machine a player is sitting at is not a theoretical concern.
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(expected);
+  const matches = a.length === b.length && crypto.timingSafeEqual(a, b);
+
+  if (!matches) {
+    logger("staff escape rejected");
+    return { ok: false, reason: "That code is not right" };
+  }
+
+  applyLock(false, "Unlocked by staff for maintenance");
+  reportEscape({ at: new Date().toISOString() });
+  return { ok: true };
+}
+
+/**
+ * Tells the server the escape was used. Queued if it cannot be delivered, and
+ * flushed on the next heartbeat — the point of the audit trail is that it
+ * survives the outage that made the escape necessary.
+ */
+async function reportEscape(entry) {
+  pendingEscapeReports.push(entry);
+  await flushEscapeReports();
+}
+
+async function flushEscapeReports() {
+  if (!pendingEscapeReports.length || !api) return;
+  const queued = [...pendingEscapeReports];
+  try {
+    await api.reportStaffEscape(queued);
+    pendingEscapeReports = [];
+  } catch {
+    // Keep them. The next heartbeat tries again.
+  }
+}
+
+function logger(message) {
+  // The kiosk has no log file of its own by design — a player sitting at the
+  // machine should not be able to read one. This goes to stdout, which the
+  // watchdog's parent captures.
+  console.log(JSON.stringify({ ts: new Date().toISOString(), msg: message }));
 }
 
 // ─── Smart Sync, driven by the renderer once a player is seated ──────────────
@@ -339,6 +486,8 @@ function registerIpc() {
     }
   });
 
+  ipcMain.handle("seika:staff-escape", (_e, { code }) => attemptStaffEscape(code));
+
   ipcMain.handle("seika:config", () => ({
     pcId: config.pcId,
     apiUrl: config.apiUrl,
@@ -371,6 +520,7 @@ app.whenReady().then(() => {
   connectRealtime();
   startHeartbeat();
   startQrLoop();
+  registerStaffEscape();
 });
 
 /** A player closing the lock screen must not leave the PC open. */
@@ -383,6 +533,7 @@ app.on("window-all-closed", (e) => {
 });
 
 app.on("will-quit", () => {
+  stopAssertingLock();
   globalShortcut.unregisterAll();
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   if (qrTimer) clearInterval(qrTimer);

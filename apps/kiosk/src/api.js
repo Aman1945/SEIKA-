@@ -69,6 +69,18 @@ class KioskApi {
     return this.request("/health");
   }
 
+  /**
+   * Reports uses of the local staff escape. Batched because an outage is
+   * exactly when the escape gets used and the report cannot be delivered, so
+   * several may be owed at once.
+   */
+  reportStaffEscape(entries) {
+    return this.request(`/api/pcs/${this.pcId}/staff-escape`, {
+      method: "POST",
+      body: { clientKey: this.clientKey, uses: entries },
+    });
+  }
+
   // ─── Smart Sync, on behalf of the seated player ───────────────────────────
 
   syncGames(playerToken) {

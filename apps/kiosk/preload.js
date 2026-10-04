@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld("seika", {
   onSession: on("seika:session"),
   onOrder: on("seika:order"),
   onFatal: on("seika:fatal"),
+  onEscapePrompt: on("seika:escape-prompt"),
 
   // Requests the renderer may make.
   getConfig: () => ipcRenderer.invoke("seika:config"),
@@ -34,6 +35,11 @@ contextBridge.exposeInMainWorld("seika", {
   syncUp: (playerToken, game, baseVersion) =>
     ipcRenderer.invoke("seika:sync-up", { playerToken, game, baseVersion }),
 
-  /** Lock only. There is no unlock here, by design. */
+  /**
+   * Lock only. There is no plain unlock here, by design: the server unlocks.
+   * The one exception is the staff escape, which takes a code and is reported
+   * to the server either immediately or on the next heartbeat.
+   */
   lock: () => ipcRenderer.send("seika:request-lock"),
+  staffEscape: (code) => ipcRenderer.invoke("seika:staff-escape", { code }),
 });

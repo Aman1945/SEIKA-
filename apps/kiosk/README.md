@@ -55,22 +55,112 @@ one, and a game may be reading it.
 Set `gameRoots` in `config.js` to where each game keeps its settings on that
 machine. A game not listed is never considered.
 
-## Hard lock on Windows
+## Running it on Windows
 
-The Electron window covers the screen and blocks the usual escapes (Alt+Tab,
-Win, Alt+F4, Ctrl+Shift+Esc, F11). That is not enough on its own —
-**Ctrl+Alt+Del cannot be blocked from user space.** Production needs one of:
+### 1. Install the app
 
-- **Assigned Access (Kiosk mode)** — Windows Pro/Enterprise, built in. Set SEIKA
-  as the kiosk app. Simplest and the most robust.
-- **Shell replacement** — set the app as the Windows shell so `explorer.exe`
-  never loads: `HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon\Shell`.
-  No desktop, no taskbar.
+Build the installer (from any OS — electron-builder cross-builds):
 
-Either way, add:
-- auto-start at boot,
-- a watchdog service that relaunches the app if it exits,
-- a local Administrator account for staff that is *not* the kiosk account.
+```bash
+pnpm --filter @seika/kiosk dist     # → dist/SEIKA Setup 0.1.0.exe
+```
+
+Copy it to the gaming PC and run it. It installs per-machine to
+`C:\Program Files\SEIKA`. Windows SmartScreen will warn, because the build is
+unsigned — "More info" then "Run anyway". Buy a code-signing certificate before
+you roll this out to a zone, or staff will be clicking past that warning on
+every PC and will stop reading it.
+
+### 2. Point it at the zone
+
+```powershell
+cd "C:\Program Files\SEIKA\resources\app"
+copy config.example.js config.js
+notepad config.js
+```
+
+Fill in `apiUrl`, `pcId` and `clientKey` from the zone console, and set
+`staffEscapeCodeHash` (see below).
+
+### 3. Lock the machine down
+
+```powershell
+cd "C:\Program Files\SEIKA\resources\windows"
+.\Install-SeikaKiosk.ps1
+```
+
+from an **Administrator** PowerShell. Then reboot.
+
+## Why the lock is shaped this way
+
+Electron on its own does not hold a Windows PC. `globalShortcut` cannot stop
+the Windows key, cannot stop Task Manager, and **nothing in user space can stop
+Ctrl+Alt+Del** — it is a secure attention sequence, and any product claiming
+otherwise is lying to you. A player gets behind an Electron-only lock screen in
+about a minute.
+
+So the real lock is Windows policy, applied by `Install-SeikaKiosk.ps1`:
+
+| Escape | What stops it |
+|---|---|
+| End the process in Task Manager | Task Manager disabled by policy |
+| Ctrl+Alt+Del → Task Manager / sign out / switch user | Every option on that screen removed, so the combination leads nowhere |
+| Windows key → Start menu | Both Win keys mapped out at the keyboard driver (needs a reboot; an app-level hook loses the race against the shell) |
+| Alt+Tab, Alt+F4, Win+D and friends | Blocked by the app while it has focus |
+| Kill it some other way | Watchdog relaunches it within a minute |
+| A game or updater steals focus | The lock screen re-asserts itself every second |
+| Boot a USB stick | **BIOS supervisor password — set this yourself.** Nothing in software can stop it. |
+
+### Why not Assigned Access or shell replacement
+
+Those are the usual answers for a kiosk and both are wrong here. Assigned
+Access allows exactly one application, and shell replacement removes the
+desktop entirely — a gaming PC has to let the player launch games once they
+have paid. So explorer keeps running and SEIKA is an always-on-top overlay
+Windows will not let them dismiss.
+
+## The staff escape
+
+`Ctrl+Alt+Shift+U` on the lock screen asks for a code and unlocks the PC for
+maintenance.
+
+This is a backdoor and it is there on purpose. Without it, a zone whose network
+drops has every PC locked with no way in — the kiosk cannot ask the server for
+permission at precisely the moment it most needs to. That failure mode is worse
+than the risk, provided the risk stays bounded:
+
+- The code is set per zone in `config.js` and never ships in the build.
+- Prefer the hash, so the plain code is not sitting on a gaming PC:
+  ```bash
+  node -e "console.log(require('crypto').createHash('sha256').update('YOUR-CODE').digest('hex'))"
+  ```
+- Every use is written to the zone's audit log — immediately when online, and
+  on the next heartbeat when it was used during an outage. Staff cannot use it
+  quietly.
+- It unlocks for maintenance only. It starts no session, bills nobody and
+  awards no XP, so it cannot hand out free play that looks paid.
+
+**Rotate it when a staff member leaves.**
+
+## Undoing it
+
+```powershell
+.\Uninstall-SeikaKiosk.ps1
+```
+
+Reverses every policy, task and key mapping. A lockdown you cannot undo is a
+bricked PC, so this is deliberately tolerant — each step is independent and a
+half-applied install still comes all the way back.
+
+If a PC is locked and you cannot reach PowerShell at all, boot into **Safe
+Mode**: the scheduled tasks do not run there, so you get a normal desktop and
+an Administrator prompt.
+
+## Also do these by hand
+
+- Player account: auto-login, **no administrator rights**.
+- A separate Administrator account for staff, which you do not lock down.
+- BIOS: supervisor password, and disable USB and network boot.
 
 ## Tests
 

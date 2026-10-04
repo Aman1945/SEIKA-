@@ -157,6 +157,35 @@
   <div class="sub">This screen will return when your session ends.</div>
 </div>
 
+<!-- Staff escape. Hidden until the key combination is pressed, so a player
+     never learns it exists by looking at the screen. -->
+<div id="escape" style="display:none;position:fixed;inset:0;z-index:50;
+     background:rgba(10,12,18,.94);align-items:center;justify-content:center;">
+  <div style="background:var(--raised);border:1px solid var(--border);border-radius:16px;
+              padding:28px;width:360px;max-width:90vw;">
+    <div style="font-size:17px;font-weight:600;margin-bottom:6px;">Staff unlock</div>
+    <div style="font-size:13px;color:var(--dim);margin-bottom:16px;line-height:1.5;">
+      For maintenance. This unlocks the PC without starting a session, and it is
+      recorded on the zone's audit log.
+    </div>
+    <input id="escapeCode" type="password" inputmode="numeric" autocomplete="off"
+           placeholder="Staff code"
+           style="width:100%;padding:12px 14px;font-size:16px;border-radius:8px;
+                  border:1px solid var(--border);background:#1c2333;color:var(--text);" />
+    <div id="escapeError" style="color:var(--bad);font-size:13px;margin-top:8px;display:none;"></div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button id="escapeCancel" style="flex:1;padding:11px;border-radius:8px;cursor:pointer;
+              border:1px solid var(--border);background:transparent;color:var(--text);font:inherit;">
+        Cancel
+      </button>
+      <button id="escapeGo" style="flex:1;padding:11px;border-radius:8px;cursor:pointer;
+              border:none;background:var(--accent);color:#04211c;font:inherit;font-weight:600;">
+        Unlock
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="status">
   <span class="pill"><span class="dot" id="netDot"></span><span id="netText">Connecting…</span></span>
   <span class="pill"><span class="dot" id="beatDot"></span><span id="beatText">No heartbeat</span></span>
@@ -216,6 +245,40 @@
     const left = Math.max(0, Math.round((qrExpiresAt - Date.now()) / 1000));
     $("codeAge").textContent = left > 0 ? `Code refreshes in ${left}s` : "Refreshing code…";
   }, 1000);
+
+  // ─── Staff escape ──────────────────────────────────────────────────────
+  const escape = $("escape");
+
+  function closeEscape() {
+    escape.style.display = "none";
+    $("escapeCode").value = "";
+    $("escapeError").style.display = "none";
+  }
+
+  seika.onEscapePrompt(() => {
+    escape.style.display = "flex";
+    $("escapeCode").focus();
+  });
+
+  $("escapeCancel").addEventListener("click", closeEscape);
+
+  $("escapeGo").addEventListener("click", async () => {
+    const res = await seika.staffEscape($("escapeCode").value);
+    if (res.ok) {
+      closeEscape();
+    } else {
+      const err = $("escapeError");
+      err.textContent = res.reason ?? "That did not work";
+      err.style.display = "block";
+      $("escapeCode").value = "";
+      $("escapeCode").focus();
+    }
+  });
+
+  $("escapeCode").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") $("escapeGo").click();
+    if (e.key === "Escape") closeEscape();
+  });
 
   // Nothing on the lock screen is a normal web page: no context menu, no
   // dragging, no keyboard shortcuts that could reach a browser affordance.

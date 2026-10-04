@@ -2,12 +2,13 @@
   "name": "@seika/kiosk",
   "version": "0.1.0",
   "private": true,
-  "description": "SEIKA PC Client — Windows kiosk lock for gaming PCs",
+  "description": "SEIKA PC Client \u2014 Windows kiosk lock for gaming PCs",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "dist": "electron-builder --win",
-    "test": "node --test test/*.test.js"
+    "dist": "electron-builder --win --x64",
+    "test": "node --test test/*.test.js",
+    "dist:all": "electron-builder --win --x64 --arm64"
   },
   "dependencies": {
     "qrcode": "^1.5.4",
@@ -20,15 +21,36 @@
   "build": {
     "appId": "gg.seika.kiosk",
     "productName": "SEIKA",
-    "files": ["main.js", "preload.js", "src/**/*", "renderer/**/*", "package.json"],
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
     "win": {
-      "target": ["nsis"],
-      "requestedExecutionLevel": "requireAdministrator"
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
       "perMachine": true,
       "allowToChangeInstallationDirectory": true
-    }
+    },
+    "extraResources": [
+      {
+        "from": "windows",
+        "to": "windows",
+        "filter": [
+          "**/*.ps1"
+        ]
+      }
+    ]
   }
 }

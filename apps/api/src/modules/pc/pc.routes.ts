@@ -92,6 +92,48 @@ pcRouter.post(
   })
 );
 
+/**
+ * A kiosk reports that its local staff escape was used.
+ *
+ * Authenticated by clientKey like the heartbeat, because this arrives from the
+ * machine rather than a signed-in person. Uses are batched: the escape exists
+ * for outages, so the report usually cannot be delivered at the moment it
+ * happens and several may be owed at once.
+ */
+pcRouter.post(
+  "/:id/staff-escape",
+  asyncHandler(async (req, res) => {
+    const body = z
+      .object({
+        clientKey: z.string(),
+        uses: z.array(z.object({ at: z.string() })).min(1).max(50),
+      })
+      .parse(req.body);
+
+    const pc = await PC.findById(req.params.id);
+    if (!pc) throw notFound("PC not found");
+    if (pc.clientKey !== body.clientKey) throw forbidden("Invalid clientKey");
+
+    // One audit entry per use, carrying when it actually happened rather than
+    // when it was reported — otherwise an outage makes them all look
+    // simultaneous.
+    for (const use of body.uses) {
+      await audit({
+        actorId: `kiosk:${req.params.id}`,
+        actorType: "staff",
+        zoneId: String(pc.zoneId),
+        action: "PC_STAFF_ESCAPE_USED",
+        entityType: "pc",
+        entityId: String(pc._id),
+        reason: "Local staff code used to unlock this PC",
+        newValue: { occurredAt: use.at, pcNumber: pc.pcNumber },
+      });
+    }
+
+    res.json({ ok: true, recorded: body.uses.length });
+  })
+);
+
 /** Staff sends a trusted command to a PC kiosk. */
 pcRouter.post(
   "/:id/command",

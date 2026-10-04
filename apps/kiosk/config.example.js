@@ -18,6 +18,26 @@ window.SEIKA_CONFIG = {
   // tokens. Leave unset unless the console tells you to set it.
   staffToken: undefined,
 
+  // ─── Staff escape ────────────────────────────────────────────────────────
+  // Ctrl+Alt+Shift+U on the lock screen asks for this code and unlocks the PC
+  // for maintenance.
+  //
+  // This exists because the alternative is worse: without it, a zone whose
+  // network drops has every PC locked and no way in — the kiosk cannot ask the
+  // server for permission exactly when it most needs to.
+  //
+  // It is still a backdoor, so: give it to staff only, rotate it when someone
+  // leaves, and know that every use is written to the zone's audit log (sent
+  // immediately when online, on the next heartbeat when it was used during an
+  // outage). It unlocks for maintenance only — it starts no session, bills
+  // nobody, and awards no XP.
+  //
+  // Prefer the hash so the plain code is not sitting on the gaming PC:
+  //   node -e "console.log(require('crypto').createHash('sha256').update('YOUR-CODE').digest('hex'))"
+  staffEscapeCodeHash: undefined,
+  // Or, for a quick setup, the code itself:
+  // staffEscapeCode: "1234",
+
   // Where each game keeps its settings on THIS machine. Only games listed here
   // are considered for Smart Sync, and even then the server decides which
   // folders inside them may actually sync.

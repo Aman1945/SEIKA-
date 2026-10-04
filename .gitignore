@@ -11,3 +11,7 @@ coverage/
 .DS_Store
 .turbo/
 *.tsbuildinfo
+
+# Electron build output — the installer is 77MB and is published as a release,
+# not committed.
+apps/kiosk/dist/
