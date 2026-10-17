@@ -3,6 +3,6 @@ packages:
   - "packages/*"
 allowBuilds:
   '@scarf/scarf': false
-  electron: false
+  electron: true
   esbuild: true
   mongodb-memory-server: true

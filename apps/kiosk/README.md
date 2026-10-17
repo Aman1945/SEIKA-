@@ -182,3 +182,48 @@ half-written. Those run in CI.
   displays the code.
 - Signed installer: `pnpm dist` produces an NSIS installer but it is unsigned,
   so Windows will warn on first run.
+
+## Checking the lock actually works
+
+Two levels, because they fail differently.
+
+**The server sends the right commands** — `apps/api/test/q-kiosk-lock.test.ts`,
+nine cases, in CI. It runs a real HTTP server and connects a real socket client
+standing in for a kiosk, because the lock is not an API response: it is a
+message pushed to one machine, and a kiosk that never receives it is a PC that
+never unlocks. It asserts that a QR scan sends nothing, that authorizing sends
+nothing, that *starting* sends `unlock`, that ending sends `lock`, that a
+player who cannot pay never triggers one, that a command for one PC never
+reaches another, and that a wrong clientKey is refused and receives nothing.
+
+**The shipped kiosk obeys them** — `test/drive-lock-check.mjs`, run by hand
+against a running stack:
+
+```bash
+# API
+pnpm dev:api:mem
+curl -sX POST localhost:4000/api/dev/seed > /tmp/kiosk-seed.json
+
+# config.js pointed at that PC, then:
+npx electron . --remote-debugging-port=9333
+node test/drive-lock-check.mjs
+```
+
+It drives a whole session and reads the lock screen's own DOM at each step, so
+"the PC unlocked" is an observation rather than an inference:
+
+```
+PASS  at rest, before anyone sits down          locked=true
+PASS  after the QR scan (identity only)         locked=true
+PASS  after payment is authorized               locked=true
+PASS  after the session starts                  locked=false  "Session authorized"
+PASS  after the session ends                    locked=true   "Session ended"
+PASS  staff unlock from the console             locked=false
+PASS  staff maintenance from the console        locked=true   "This PC is under maintenance"
+```
+
+This has been run on macOS, where the Electron window and the command flow are
+the same but the Windows lockdown is not. It verifies the *product logic* —
+that the server drives the lock and nothing else does. It does not verify that
+a player cannot get behind the window, which is Windows policy work and still
+needs a real machine.
