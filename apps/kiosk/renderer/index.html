@@ -7,23 +7,35 @@
    * else competing for attention.
    */
   :root {
-    --bg: #0a0c12;
-    --raised: #141926;
-    --border: #242c3d;
-    --text: #eef2fa;
-    --dim: #98a4bd;
-    --faint: #64708a;
+    --bg: #0a0b1a;
+    --raised: rgb(255 255 255 / 0.07);
+    --border: rgb(255 255 255 / 0.14);
+    --edge: rgb(255 255 255 / 0.3);
+    --text: #f4f6fc;
+    --dim: #aab4cc;
+    --faint: #7c879c;
     --accent: #33e1c4;
-    --bad: #ff5f6d;
-    --warn: #ffb84f;
+    --violet: #8b6cff;
+    --bad: #ff6b7a;
+    --warn: #ffb454;
+    --blur: blur(26px) saturate(170%);
   }
 
   * { box-sizing: border-box; }
 
+  /*
+   * The ambient room this screen lives in. A lock screen is on display for
+   * hours at a time in a dim venue, so it is built to be looked at: the glow
+   * carries the brand, and the QR stays the one bright thing on it.
+   */
   body {
     margin: 0;
     min-height: 100vh;
-    background: radial-gradient(circle at 50% 0%, #1a1440 0%, var(--bg) 60%);
+    background-color: var(--bg);
+    background-image:
+      radial-gradient(48rem 40rem at 50% -14%, rgb(139 108 255 / 0.5), transparent 62%),
+      radial-gradient(38rem 32rem at 8% 88%, rgb(51 225 196 / 0.26), transparent 60%),
+      radial-gradient(36rem 30rem at 94% 80%, rgb(255 94 164 / 0.22), transparent 60%);
     color: var(--text);
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     display: flex;
@@ -39,13 +51,14 @@
   }
 
   .brand {
-    font-size: 46px;
+    font-size: 54px;
     font-weight: 800;
-    letter-spacing: 8px;
-    background: linear-gradient(100deg, var(--accent), #7c5cff);
+    letter-spacing: 14px;
+    background: linear-gradient(100deg, var(--accent), var(--violet));
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+    filter: drop-shadow(0 0 28px rgb(124 92 255 / 0.4));
   }
 
   .pc {
@@ -54,21 +67,37 @@
     margin-top: -22px;
   }
 
+  /*
+   * The QR sits on white inside a glass frame. The code itself must stay high
+   * contrast — a phone camera reading it across a room is the whole job, and
+   * no amount of style is worth a scan that fails.
+   */
   .qr-card {
+    position: relative;
     background: #fff;
-    border-radius: 20px;
-    padding: 18px;
-    width: 320px;
-    height: 320px;
+    border-radius: 26px;
+    padding: 20px;
+    width: 332px;
+    height: 332px;
     display: grid;
     place-items: center;
+    box-shadow:
+      0 0 0 10px rgb(255 255 255 / 0.05),
+      0 0 0 11px rgb(255 255 255 / 0.12),
+      0 30px 70px -20px rgb(0 0 0 / 0.75),
+      0 0 90px -18px rgb(124 92 255 / 0.5);
   }
 
   .qr-card img { width: 100%; height: 100%; display: block; }
 
   .qr-placeholder { color: #64708a; font-size: 14px; text-align: center; padding: 20px; }
 
-  .instruction { font-size: 21px; font-weight: 600; text-align: center; }
+  .instruction {
+    font-size: 23px;
+    font-weight: 600;
+    text-align: center;
+    letter-spacing: 0.3px;
+  }
 
   .sub {
     font-size: 15px;
@@ -78,17 +107,27 @@
     line-height: 1.55;
   }
 
-  /* The machine's own state lives at the bottom, where staff look for it. */
+  /*
+   * The machine's own state, bottom centre where staff look for it. Glass, so
+   * it reads as part of the surface rather than text floating on a gradient.
+   */
   .status {
     position: fixed;
-    bottom: 22px;
-    left: 0;
-    right: 0;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
-    justify-content: center;
-    gap: 22px;
+    align-items: center;
+    gap: 20px;
     font-size: 12px;
     color: var(--faint);
+    padding: 10px 20px;
+    border-radius: 999px;
+    background: var(--raised);
+    border: 1px solid var(--border);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
+    box-shadow: 0 1px 0 0 var(--edge) inset, 0 10px 30px -12px rgb(0 0 0 / 0.7);
   }
 
   .pill { display: flex; align-items: center; gap: 7px; }
@@ -98,9 +137,13 @@
     height: 8px;
     border-radius: 50%;
     background: var(--bad);
+    box-shadow: 0 0 10px currentColor;
   }
 
-  .dot[data-ok="true"] { background: var(--accent); }
+  .dot[data-ok="true"] {
+    background: var(--accent);
+    box-shadow: 0 0 12px rgb(51 225 196 / 0.8);
+  }
 
   .banner {
     position: fixed;
@@ -116,19 +159,29 @@
 
   .banner[data-kind="fatal"] {
     display: block;
-    background: color-mix(in srgb, var(--bad) 22%, var(--bg));
+    background: rgb(255 107 122 / 0.16);
+    border-bottom: 1px solid rgb(255 107 122 / 0.34);
     color: var(--bad);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
   }
 
   .banner[data-kind="notice"] {
     display: block;
-    background: color-mix(in srgb, var(--warn) 20%, var(--bg));
+    background: rgb(255 180 84 / 0.15);
+    border-bottom: 1px solid rgb(255 180 84 / 0.32);
     color: var(--warn);
+    backdrop-filter: var(--blur);
+    -webkit-backdrop-filter: var(--blur);
   }
 
   .unlocked {
     display: none;
     text-align: center;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
   }
 
   body[data-locked="false"] .locked-view { display: none; }
@@ -161,8 +214,10 @@
      never learns it exists by looking at the screen. -->
 <div id="escape" style="display:none;position:fixed;inset:0;z-index:50;
      background:rgba(10,12,18,.94);align-items:center;justify-content:center;">
-  <div style="background:var(--raised);border:1px solid var(--border);border-radius:16px;
-              padding:28px;width:360px;max-width:90vw;">
+  <div style="background:var(--raised);border:1px solid var(--border);border-radius:22px;
+              padding:30px;width:368px;max-width:90vw;
+              backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
+              box-shadow:0 1px 0 0 var(--edge) inset, 0 30px 70px -22px rgb(0 0 0 / .8);">
     <div style="font-size:17px;font-weight:600;margin-bottom:6px;">Staff unlock</div>
     <div style="font-size:13px;color:var(--dim);margin-bottom:16px;line-height:1.5;">
       For maintenance. This unlocks the PC without starting a session, and it is
@@ -170,16 +225,19 @@
     </div>
     <input id="escapeCode" type="password" inputmode="numeric" autocomplete="off"
            placeholder="Staff code"
-           style="width:100%;padding:12px 14px;font-size:16px;border-radius:8px;
-                  border:1px solid var(--border);background:#1c2333;color:var(--text);" />
+           style="width:100%;padding:13px 15px;font-size:16px;border-radius:12px;
+                  border:1px solid var(--border);background:rgb(0 0 0 / .26);color:var(--text);
+                  box-shadow:0 2px 10px -4px rgb(0 0 0 / .55) inset;" />
     <div id="escapeError" style="color:var(--bad);font-size:13px;margin-top:8px;display:none;"></div>
     <div style="display:flex;gap:8px;margin-top:16px;">
-      <button id="escapeCancel" style="flex:1;padding:11px;border-radius:8px;cursor:pointer;
+      <button id="escapeCancel" style="flex:1;padding:12px;border-radius:12px;cursor:pointer;
               border:1px solid var(--border);background:transparent;color:var(--text);font:inherit;">
         Cancel
       </button>
-      <button id="escapeGo" style="flex:1;padding:11px;border-radius:8px;cursor:pointer;
-              border:none;background:var(--accent);color:#04211c;font:inherit;font-weight:600;">
+      <button id="escapeGo" style="flex:1;padding:12px;border-radius:12px;cursor:pointer;
+              border:none;background:linear-gradient(135deg,var(--accent),#1fb9a0);
+              color:#04211c;font:inherit;font-weight:700;
+              box-shadow:0 8px 22px -8px rgb(51 225 196 / .55);">
         Unlock
       </button>
     </div>

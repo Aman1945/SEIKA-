@@ -1,44 +1,89 @@
 /*
- * SEIKA dashboard styling.
+ * SEIKA dashboard — glass over an ambient dark room.
  *
- * Mobile-first, because the plan treats owner mobile as P0 — an owner checks
- * their zone from a phone far more often than from a desk. Everything is
- * plain CSS with custom properties: one stylesheet is easier to keep coherent
- * across a dozen screens than a utility framework nobody configured, and it
- * keeps the app dependency-light.
+ * Two ideas, kept apart on purpose:
  *
- * The palette is dark by default: these screens live on a counter in a dim
- * gaming zone, and a white dashboard at 2am is a complaint waiting to happen.
+ *   Glass is for surfaces. Panels are translucent and blurred so the ambient
+ *   colour behind shows through, which is what gives the product depth without
+ *   drawing a single extra line.
+ *
+ *   Soft depth is for controls. Buttons and tiles get a light edge from above
+ *   and a shadow below, so they read as raised, and invert to inset when
+ *   pressed. That is the neumorphic half, used only where a thing is meant to
+ *   be touched.
+ *
+ * What is deliberately NOT borrowed from either style is their contrast. Pure
+ * neumorphism puts grey text on grey and glassmorphism lets backgrounds bleed
+ * through labels; both look lovely in a screenshot and fail at a counter at
+ * 2am, which is where this screen actually lives. So text sits on its own
+ * opaque-enough layer and stays at AA or better.
+ *
+ * Mobile-first: the plan makes owner-on-a-phone a P0 case.
  */
 
 :root {
   color-scheme: dark;
 
-  --bg: #0b0e14;
-  --bg-raised: #141923;
-  --bg-input: #1b2230;
-  --border: #232b3a;
-  --border-strong: #33405a;
+  /* Base — a deep blue-black, not pure black, so glass has something to tint */
+  --bg: #0c1020;
+  --bg-deep: #0a0e1e;
 
-  --text: #e6ebf5;
-  --text-dim: #94a1b8;
-  --text-faint: #64708a;
+  /* Ambient light sources behind the glass */
+  --glow-1: 139 108 255;  /* violet  */
+  --glow-2: 51 225 196;   /* mint    */
+  --glow-3: 92 150 255;   /* blue    */
+  --glow-4: 255 94 164;   /* magenta — a warm counterweight to all the cool  */
 
-  --accent: #4f8cff;
-  --accent-dim: #2f5dad;
+  /*
+   * Glass surfaces. Three depths, consistently applied.
+   *
+   * These alphas look high written down and are not: the panels sit over a
+   * near-black room, so anything lower and the blur has nothing to show —
+   * every card reads as flat black and the whole effect disappears.
+   */
+  --glass-1: rgb(255 255 255 / 0.07);
+  --glass-2: rgb(255 255 255 / 0.10);
+  --glass-3: rgb(255 255 255 / 0.15);
+  --glass-edge: rgb(255 255 255 / 0.14);
+  --glass-edge-bright: rgb(255 255 255 / 0.28);
+
+  /* Text. Contrast is the one thing this design does not trade away. */
+  --text: #f2f5fb;        /* ~16:1 on base */
+  --text-dim: #a8b4c9;    /* ~7:1  */
+  --text-faint: #7b8699;  /* ~4.6:1 — the floor, used for labels only */
+
+  --accent: #7c5cff;
+  --accent-soft: rgb(124 92 255 / 0.16);
+  --mint: #33e1c4;
+  --mint-soft: rgb(51 225 196 / 0.14);
 
   --ok: #3ddc97;
   --busy: #4f8cff;
-  --warn: #ffb84f;
-  --bad: #ff5f6d;
-  --idle: #7c8aa5;
+  --warn: #ffb454;
+  --bad: #ff6b7a;
+  --idle: #8993a8;
 
-  --radius: 10px;
-  --radius-sm: 6px;
-  --gap: 12px;
-  --shadow: 0 2px 12px rgb(0 0 0 / 0.35);
+  --radius: 18px;
+  --radius-sm: 12px;
+  --radius-xs: 9px;
+  --gap: 14px;
 
-  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Soft depth: light from above, shadow below. */
+  --lift: 0 1px 0 0 var(--glass-edge-bright) inset,
+          0 1px 24px -6px rgb(255 255 255 / 0.06) inset,
+          0 10px 34px -10px rgb(0 0 0 / 0.7);
+  --lift-sm: 0 1px 0 0 var(--glass-edge-bright) inset,
+             0 5px 16px -7px rgb(0 0 0 / 0.6);
+  --press: 0 2px 8px -4px rgb(0 0 0 / 0.5) inset,
+           0 1px 0 0 rgb(255 255 255 / 0.05);
+
+  --blur: blur(26px) saturate(170%);
+  --blur-sm: blur(16px) saturate(155%);
+
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --font: var(--font-ui), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-display), var(--font-ui), system-ui, sans-serif;
   --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
 }
 
@@ -46,26 +91,53 @@
   box-sizing: border-box;
 }
 
-html,
+html {
+  background: var(--bg-deep);
+}
+
 body {
   margin: 0;
   padding: 0;
-  background: var(--bg);
+  min-height: 100dvh;
   color: var(--text);
   font-family: var(--font);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
-/* Numbers in tables must line up; tabular figures do that without a mono font. */
+/*
+ * The ambient room. Three slow-moving colour fields behind everything, which
+ * is what the glass is actually refracting — without them the blur has nothing
+ * to do and every panel reads as flat grey.
+ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  /*
+   * Positions matter as much as opacity: orbs parked in the corners end up
+   * behind the sidebar and off the edges, so the content area — the part
+   * anyone actually looks at — gets no light and every panel reads flat.
+   * These sit inside the working area.
+   */
+  background:
+    radial-gradient(48rem 40rem at 22% 8%, rgb(var(--glow-1) / 0.50), transparent 62%),
+    radial-gradient(44rem 36rem at 92% 22%, rgb(var(--glow-3) / 0.40), transparent 60%),
+    radial-gradient(46rem 38rem at 58% 92%, rgb(var(--glow-2) / 0.32), transparent 60%),
+    radial-gradient(32rem 28rem at 4% 66%, rgb(var(--glow-4) / 0.22), transparent 64%);
+}
+
 .num {
   font-variant-numeric: tabular-nums;
 }
 
 .mono {
   font-family: var(--mono);
-  font-size: 0.85em;
+  font-size: 0.86em;
+  letter-spacing: -0.01em;
 }
 
 /* ─── Shell ────────────────────────────────────────────────────────────────── */
@@ -83,21 +155,28 @@ body {
   display: flex;
   align-items: center;
   gap: var(--gap);
-  padding: 10px 14px;
-  background: color-mix(in srgb, var(--bg-raised) 92%, transparent);
-  backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  background: rgb(10 13 26 / 0.46);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border-bottom: 1px solid var(--glass-edge);
 }
 
 .topbar__brand {
-  font-weight: 700;
-  letter-spacing: 0.5px;
+  font-family: var(--font-display);
   font-size: 15px;
+  letter-spacing: 2px;
+  background: linear-gradient(100deg, var(--mint), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
 .topbar__zone {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: 12px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -112,17 +191,17 @@ body {
 
 .main {
   flex: 1;
-  padding: 14px;
-  padding-bottom: 84px; /* clear the mobile tab bar */
-  max-width: 1200px;
+  padding: 16px;
+  padding-bottom: 96px; /* clear the tab bar */
+  max-width: 1280px;
   width: 100%;
   margin: 0 auto;
 }
 
 /*
- * Navigation is a bottom tab bar on a phone and a sidebar on a desktop. Same
- * markup, same links, same RBAC — the plan is explicit that mobile is not a
- * weaker layer.
+ * Navigation is a bottom tab bar on a phone and a rail on a desktop. Same
+ * markup and the same permissions either way — the plan is explicit that
+ * mobile is not a weaker layer.
  */
 .nav {
   position: fixed;
@@ -131,11 +210,12 @@ body {
   right: 0;
   z-index: 30;
   display: flex;
-  gap: 2px;
-  padding: 6px;
-  background: color-mix(in srgb, var(--bg-raised) 96%, transparent);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid var(--border);
+  gap: 4px;
+  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
+  background: rgb(10 13 26 / 0.55);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border-top: 1px solid var(--glass-edge);
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -146,28 +226,30 @@ body {
 
 .nav__item {
   flex: 1 0 auto;
-  min-width: 64px;
+  min-width: 66px;
+  min-height: 50px; /* thumb-sized: a cashier taps this mid-shift */
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  justify-content: center;
+  gap: 3px;
   padding: 6px 8px;
   border-radius: var(--radius-sm);
   color: var(--text-faint);
   text-decoration: none;
   font-size: 11px;
-  /* Touch target: a cashier taps this with a thumb, mid-shift. */
-  min-height: 48px;
-  justify-content: center;
+  font-weight: 500;
+  transition: color 180ms var(--ease), background 180ms var(--ease);
 }
 
 .nav__item[data-active="true"] {
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--mint);
+  background: var(--mint-soft);
+  box-shadow: var(--lift-sm);
 }
 
 .nav__icon {
-  font-size: 18px;
+  font-size: 17px;
   line-height: 1;
 }
 
@@ -188,12 +270,12 @@ body {
     top: 0;
     bottom: auto;
     height: 100dvh;
-    width: 200px;
+    width: 212px;
     flex-direction: column;
-    gap: 2px;
-    padding: 14px 10px;
+    gap: 4px;
+    padding: 18px 12px;
     border-top: none;
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--glass-edge);
     overflow-y: auto;
   }
 
@@ -201,23 +283,26 @@ body {
     flex: 0 0 auto;
     flex-direction: row;
     justify-content: flex-start;
-    gap: 10px;
+    gap: 11px;
     font-size: 14px;
-    padding: 10px 12px;
+    padding: 11px 14px;
   }
 
   .main {
-    padding: 20px 24px 40px;
+    padding: 24px 28px 48px;
   }
 }
 
-/* ─── Primitives ───────────────────────────────────────────────────────────── */
+/* ─── Glass surfaces ───────────────────────────────────────────────────────── */
 
 .card {
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
+  background: var(--glass-1);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-edge);
   border-radius: var(--radius);
-  padding: 14px;
+  box-shadow: var(--lift);
+  padding: 16px;
 }
 
 .card--flush {
@@ -229,12 +314,13 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 .card__title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
+  letter-spacing: 0.3px;
   margin: 0;
 }
 
@@ -245,99 +331,162 @@ body {
 }
 
 h1 {
-  font-size: 20px;
+  font-family: var(--font-display);
+  font-size: 23px;
+  letter-spacing: 0.5px;
   margin: 0 0 4px;
 }
 
 h2 {
-  font-size: 16px;
-  margin: 24px 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 26px 0 12px;
+  letter-spacing: 0.2px;
+}
+
+h3 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
 }
 
 .page-sub {
   color: var(--text-dim);
   font-size: 13px;
-  margin: 0 0 18px;
+  margin: 0 0 20px;
 }
 
 .grid {
   display: grid;
   gap: var(--gap);
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
 }
 
+/* A stat tile: glass, lifted, with the number carrying the weight. */
 .stat {
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
+  position: relative;
+  background: var(--glass-1);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-edge);
   border-radius: var(--radius);
-  padding: 12px 14px;
+  box-shadow: var(--lift);
+  padding: 14px 16px;
+  overflow: hidden;
+}
+
+/* A sheen along the top edge — the single cue that says "glass". */
+.stat::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--glass-edge-bright) 30%,
+    var(--glass-edge-bright) 70%,
+    transparent
+  );
 }
 
 .stat__label {
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 1px;
   color: var(--text-faint);
+  font-weight: 600;
 }
 
 .stat__value {
-  font-size: 24px;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 26px;
   font-variant-numeric: tabular-nums;
-  margin-top: 2px;
+  margin-top: 4px;
+  letter-spacing: 0.5px;
 }
 
 .stat__note {
   font-size: 12px;
   color: var(--text-dim);
-  margin-top: 2px;
+  margin-top: 3px;
 }
+
+/* ─── Controls — this is where the soft/neumorphic half lives ─────────────── */
 
 button,
 .btn {
   font: inherit;
+  font-family: var(--font);
   font-size: 14px;
   font-weight: 500;
   color: var(--text);
-  background: var(--bg-input);
-  border: 1px solid var(--border-strong);
+  background: var(--glass-2);
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
+  border: 1px solid var(--glass-edge);
   border-radius: var(--radius-sm);
-  padding: 9px 14px;
+  box-shadow: var(--lift-sm);
+  padding: 10px 16px;
   cursor: pointer;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  min-height: 40px;
+  gap: 7px;
+  min-height: 44px; /* Apple HIG minimum */
+  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease),
+    background 160ms var(--ease), border-color 160ms var(--ease);
 }
 
 button:hover:not(:disabled),
 .btn:hover {
-  border-color: var(--accent-dim);
+  background: var(--glass-3);
+  border-color: var(--glass-edge-bright);
+}
+
+/* Pressed inverts the light: the control sinks instead of moving the layout. */
+button:active:not(:disabled),
+.btn:active {
+  box-shadow: var(--press);
+  transform: translateY(1px);
+}
+
+button:focus-visible,
+.btn:focus-visible,
+a:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 2px;
 }
 
 button:disabled {
-  opacity: 0.5;
+  opacity: 0.42;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn--primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #04121f;
+  background: linear-gradient(135deg, var(--mint), #1fb9a0);
+  border-color: transparent;
+  color: #03201c;
   font-weight: 600;
+}
+
+.btn--primary:hover {
+  background: linear-gradient(135deg, #4ae9ce, var(--mint));
 }
 
 .btn--danger {
   color: var(--bad);
-  border-color: color-mix(in srgb, var(--bad) 40%, var(--border));
+  border-color: rgb(255 107 122 / 0.32);
+  background: rgb(255 107 122 / 0.08);
 }
 
 .btn--sm {
   font-size: 13px;
-  padding: 6px 10px;
-  min-height: 32px;
+  padding: 7px 12px;
+  min-height: 36px;
+  border-radius: var(--radius-xs);
 }
 
 .btn-row {
@@ -346,36 +495,48 @@ button:disabled {
   gap: 8px;
 }
 
+/* Inputs are concave — the inset counterpart to a raised button. */
 input,
 select,
 textarea {
   font: inherit;
+  font-family: var(--font);
   font-size: 15px; /* 16px-ish stops iOS zooming the page on focus */
   color: var(--text);
-  background: var(--bg-input);
-  border: 1px solid var(--border-strong);
+  background: rgb(0 0 0 / 0.22);
+  border: 1px solid var(--glass-edge);
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  box-shadow: var(--press);
+  padding: 11px 14px;
   width: 100%;
-  min-height: 42px;
+  min-height: 44px;
+  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  outline: 2px solid var(--accent-dim);
-  outline-offset: -1px;
+  outline: none;
+  border-color: rgb(51 225 196 / 0.55);
+  box-shadow: var(--press), 0 0 0 3px var(--mint-soft);
+}
+
+input::placeholder {
+  color: var(--text-faint);
 }
 
 label {
   display: block;
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-bottom: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 6px;
 }
 
 .field {
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 
 /* ─── Tables ───────────────────────────────────────────────────────────────── */
@@ -393,20 +554,28 @@ table {
 
 th {
   text-align: left;
-  font-size: 11px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
   color: var(--text-faint);
-  font-weight: 600;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  font-weight: 700;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--glass-edge);
   white-space: nowrap;
 }
 
 td {
-  padding: 11px 12px;
-  border-bottom: 1px solid color-mix(in srgb, var(--border) 60%, transparent);
+  padding: 12px 14px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.045);
   vertical-align: middle;
+}
+
+tbody tr {
+  transition: background 140ms var(--ease);
+}
+
+tbody tr:hover {
+  background: rgb(255 255 255 / 0.03);
 }
 
 tbody tr:last-child td {
@@ -422,41 +591,43 @@ tbody tr:last-child td {
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 11px;
-  font-weight: 600;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
-  padding: 3px 8px;
+  letter-spacing: 0.7px;
+  padding: 4px 10px;
   border-radius: 999px;
   border: 1px solid;
   white-space: nowrap;
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
 }
 
 .badge[data-tone="ok"] {
   color: var(--ok);
-  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
-  background: color-mix(in srgb, var(--ok) 12%, transparent);
+  border-color: rgb(61 220 151 / 0.34);
+  background: rgb(61 220 151 / 0.11);
 }
 .badge[data-tone="busy"] {
   color: var(--busy);
-  border-color: color-mix(in srgb, var(--busy) 40%, transparent);
-  background: color-mix(in srgb, var(--busy) 12%, transparent);
+  border-color: rgb(79 140 255 / 0.34);
+  background: rgb(79 140 255 / 0.11);
 }
 .badge[data-tone="warn"] {
   color: var(--warn);
-  border-color: color-mix(in srgb, var(--warn) 40%, transparent);
-  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border-color: rgb(255 180 84 / 0.34);
+  background: rgb(255 180 84 / 0.11);
 }
 .badge[data-tone="bad"] {
   color: var(--bad);
-  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
-  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  border-color: rgb(255 107 122 / 0.34);
+  background: rgb(255 107 122 / 0.11);
 }
 .badge[data-tone="idle"] {
   color: var(--idle);
-  border-color: color-mix(in srgb, var(--idle) 40%, transparent);
-  background: color-mix(in srgb, var(--idle) 10%, transparent);
+  border-color: rgb(137 147 168 / 0.3);
+  background: rgb(137 147 168 / 0.08);
 }
 
 .dot {
@@ -465,13 +636,16 @@ tbody tr:last-child td {
   border-radius: 50%;
   background: currentColor;
   flex: 0 0 auto;
+  box-shadow: 0 0 10px currentColor;
 }
 
 .live {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
   color: var(--text-faint);
 }
 
@@ -480,68 +654,98 @@ tbody tr:last-child td {
 }
 
 .live[data-connected="true"] .dot {
-  animation: pulse 2s ease-in-out infinite;
+  animation: pulse 2.4s ease-in-out infinite;
 }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.35; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .live[data-connected="true"] .dot {
-    animation: none;
-  }
+  50% { opacity: 0.3; }
 }
 
 /* ─── PC map ───────────────────────────────────────────────────────────────── */
 
 .pc-grid {
   display: grid;
-  gap: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
 }
 
+/*
+ * A seat. The status colour is a glow along the left edge rather than a fill,
+ * so eight of them side by side read as a room and not a paint chart.
+ */
 .pc {
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--idle);
+  position: relative;
+  background: var(--glass-1);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-edge);
   border-radius: var(--radius);
-  padding: 10px 12px;
+  box-shadow: var(--lift);
+  padding: 13px 15px;
   cursor: pointer;
   text-align: left;
-  min-height: 92px;
+  min-height: 104px;
   display: flex;
   flex-direction: column;
   gap: 4px;
   align-items: stretch;
   justify-content: flex-start;
+  overflow: hidden;
+  transition: transform 180ms var(--ease), border-color 180ms var(--ease),
+    box-shadow 180ms var(--ease);
 }
 
-.pc[data-tone="ok"] { border-left-color: var(--ok); }
-.pc[data-tone="busy"] { border-left-color: var(--busy); }
-.pc[data-tone="warn"] { border-left-color: var(--warn); }
-.pc[data-tone="bad"] { border-left-color: var(--bad); }
-.pc[data-tone="idle"] { border-left-color: var(--idle); }
+.pc::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 12px;
+  bottom: 12px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--idle);
+  box-shadow: 0 0 16px 1px currentColor;
+}
+
+.pc[data-tone="ok"]::before { background: var(--ok); color: rgb(61 220 151 / 0.5); }
+.pc[data-tone="busy"]::before { background: var(--busy); color: rgb(79 140 255 / 0.5); }
+.pc[data-tone="warn"]::before { background: var(--warn); color: rgb(255 180 84 / 0.5); }
+.pc[data-tone="bad"]::before { background: var(--bad); color: rgb(255 107 122 / 0.5); }
+.pc[data-tone="idle"]::before { background: var(--idle); color: rgb(137 147 168 / 0.35); }
+
+.pc:hover {
+  transform: translateY(-2px);
+  border-color: var(--glass-edge-bright);
+}
+
+.pc:active {
+  transform: translateY(0);
+  box-shadow: var(--press);
+}
 
 .pc[data-selected="true"] {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
+  border-color: rgb(51 225 196 / 0.6);
+  box-shadow: var(--lift), 0 0 0 1px rgb(51 225 196 / 0.4);
 }
 
 .pc__number {
+  font-family: var(--font-display);
   font-weight: 700;
-  font-size: 15px;
+  font-size: 16px;
+  letter-spacing: 0.6px;
 }
 
 .pc__meta {
   font-size: 11px;
   color: var(--text-dim);
+  text-transform: lowercase;
 }
 
 .pc__timer {
   font-variant-numeric: tabular-nums;
-  font-size: 13px;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text);
   margin-top: auto;
 }
@@ -550,42 +754,49 @@ tbody tr:last-child td {
 
 .alert {
   border-radius: var(--radius-sm);
-  padding: 10px 12px;
+  padding: 12px 15px;
   font-size: 13px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   border: 1px solid;
+  backdrop-filter: var(--blur-sm);
+  -webkit-backdrop-filter: var(--blur-sm);
 }
 
 .alert--error {
   color: var(--bad);
-  border-color: color-mix(in srgb, var(--bad) 40%, transparent);
-  background: color-mix(in srgb, var(--bad) 10%, transparent);
+  border-color: rgb(255 107 122 / 0.34);
+  background: rgb(255 107 122 / 0.09);
 }
 
 .alert--ok {
   color: var(--ok);
-  border-color: color-mix(in srgb, var(--ok) 40%, transparent);
-  background: color-mix(in srgb, var(--ok) 10%, transparent);
+  border-color: rgb(61 220 151 / 0.34);
+  background: rgb(61 220 151 / 0.09);
 }
 
 .alert--info {
   color: var(--text-dim);
-  border-color: var(--border);
-  background: var(--bg-input);
+  border-color: var(--glass-edge);
+  background: var(--glass-1);
 }
 
 .empty {
   text-align: center;
-  padding: 32px 16px;
+  padding: 38px 18px;
   color: var(--text-faint);
   font-size: 13px;
 }
 
 .skeleton {
-  background: linear-gradient(90deg, var(--bg-input) 25%, var(--border) 50%, var(--bg-input) 75%);
+  background: linear-gradient(
+    90deg,
+    var(--glass-1) 25%,
+    var(--glass-3) 50%,
+    var(--glass-1) 75%
+  );
   background-size: 200% 100%;
-  animation: shimmer 1.4s infinite;
-  border-radius: var(--radius-sm);
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-xs);
   height: 16px;
 }
 
@@ -594,40 +805,42 @@ tbody tr:last-child td {
   100% { background-position: -200% 0; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .skeleton { animation: none; }
-}
-
 /* ─── Login ────────────────────────────────────────────────────────────────── */
 
 .login {
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 20px;
+  padding: 24px;
 }
 
 .login__card {
   width: 100%;
-  max-width: 360px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 24px;
-  box-shadow: var(--shadow);
+  max-width: 382px;
+  background: var(--glass-2);
+  backdrop-filter: var(--blur);
+  -webkit-backdrop-filter: var(--blur);
+  border: 1px solid var(--glass-edge);
+  border-radius: 24px;
+  padding: 32px 28px;
+  box-shadow: var(--lift), 0 40px 80px -24px rgb(0 0 0 / 0.7);
 }
 
 .login__brand {
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: 1px;
-  margin-bottom: 2px;
+  font-family: var(--font-display);
+  font-size: 30px;
+  letter-spacing: 7px;
+  background: linear-gradient(100deg, var(--mint), var(--accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: 4px;
 }
 
 .login__sub {
   color: var(--text-dim);
   font-size: 13px;
-  margin-bottom: 20px;
+  margin-bottom: 26px;
 }
 
 /* ─── Utility ──────────────────────────────────────────────────────────────── */
@@ -635,7 +848,7 @@ tbody tr:last-child td {
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 
 .row--wrap {
@@ -646,17 +859,9 @@ tbody tr:last-child td {
   margin-left: auto;
 }
 
-.dim {
-  color: var(--text-dim);
-}
-
-.faint {
-  color: var(--text-faint);
-}
-
-.small {
-  font-size: 12px;
-}
+.dim { color: var(--text-dim); }
+.faint { color: var(--text-faint); }
+.small { font-size: 12px; }
 
 .stack {
   display: flex;
@@ -674,4 +879,34 @@ tbody tr:last-child td {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/*
+ * Reduced motion. The glass and the depth stay — they carry meaning — but
+ * nothing moves on its own.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/*
+ * Backdrop-filter is well supported but not universal. Without it, translucent
+ * panels sit directly on the ambient gradient and the text on them loses its
+ * background — so the fallback drops the transparency rather than the words.
+ */
+@supports not (backdrop-filter: blur(1px)) {
+  .card,
+  .stat,
+  .pc,
+  .login__card,
+  .topbar,
+  .nav {
+    background: #161b2e;
+  }
 }
