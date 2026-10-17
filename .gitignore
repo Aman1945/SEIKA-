@@ -15,3 +15,7 @@ coverage/
 # Electron build output — the installer is 77MB and is published as a release,
 # not committed.
 apps/kiosk/dist/
+
+# Each PC generates its own, and it holds that machine's clientKey, staff
+# token and escape code. Copy config.example.js instead.
+apps/kiosk/config.js

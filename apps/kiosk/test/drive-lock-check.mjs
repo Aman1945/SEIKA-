@@ -71,9 +71,24 @@ async function kioskState() {
   return result.value;
 }
 
+/**
+ * Screenshots the lock screen, if it is on screen.
+ *
+ * An unlocked kiosk hides its window, and Chrome's captureScreenshot on a
+ * hidden window never resolves — so this races a timeout rather than hanging
+ * the whole check. A capture that times out while unlocked is not a failure;
+ * it is the unlock working.
+ */
 async function shot(name) {
-  const { data } = await cdp.send("Page.captureScreenshot", { format: "png" });
-  await fs.writeFile(`${OUT}/${name}.png`, Buffer.from(data, "base64"));
+  const capture = cdp.send("Page.captureScreenshot", { format: "png" });
+  const timeout = new Promise((resolve) => setTimeout(() => resolve(null), 2500));
+  const result = await Promise.race([capture, timeout]);
+
+  if (!result) {
+    console.log(`      (no screenshot: the window is hidden, which is the unlock)`);
+    return;
+  }
+  await fs.writeFile(`${OUT}/${name}.png`, Buffer.from(result.data, "base64"));
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────
