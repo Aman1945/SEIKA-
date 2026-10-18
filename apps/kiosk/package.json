@@ -50,6 +50,10 @@
         "filter": [
           "**/*.ps1"
         ]
+      },
+      {
+        "from": "config.example.js",
+        "to": "config.example.js"
       }
     ]
   }

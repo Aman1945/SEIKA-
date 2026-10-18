@@ -36,11 +36,44 @@ let locked = true;
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
+/**
+ * Where a packaged kiosk keeps its config.
+ *
+ * Every gaming PC needs its own pcId and clientKey, so the config cannot live
+ * in the build — and it cannot live next to main.js either, because that is
+ * inside app.asar and read-only once packaged. An installed kiosk that looked
+ * only there could never be configured at all.
+ *
+ * ProgramData first: the installer runs per-machine, so it can write there,
+ * every user account can read it, and it survives an app update.
+ */
+function configCandidates() {
+  const paths = [];
+  if (process.env.SEIKA_CONFIG) paths.push(process.env.SEIKA_CONFIG);
+  if (process.platform === "win32") {
+    const programData = process.env.ProgramData || "C:\\ProgramData";
+    paths.push(path.join(programData, "SEIKA", "config.js"));
+  }
+  try {
+    paths.push(path.join(app.getPath("userData"), "config.js"));
+  } catch {
+    // app may not be ready yet in some call paths; the others still apply.
+  }
+  // Beside the installed executable, for an admin who would rather keep it there.
+  paths.push(path.join(path.dirname(app.getPath("exe")), "config.js"));
+  // Last: the source tree, which is how it works in development.
+  paths.push(path.join(__dirname, "config.js"));
+  return paths;
+}
+
 function loadConfig() {
-  const file = path.join(__dirname, "config.js");
-  if (!fs.existsSync(file)) {
+  const candidates = configCandidates();
+  const file = candidates.find((f) => fs.existsSync(f));
+  if (!file) {
     throw new Error(
-      "config.js is missing. Copy config.example.js to config.js and fill in the pcId and clientKey from the zone console."
+      "config.js not found. Copy config.example.js, fill in the pcId and " +
+        "clientKey from the zone console, and save it as:\n  " +
+        candidates.join("\n  ")
     );
   }
   // config.js assigns to window.SEIKA_CONFIG so the same file can be loaded by
@@ -52,9 +85,10 @@ function loadConfig() {
 
   for (const key of ["apiUrl", "pcId", "clientKey"]) {
     if (!cfg?.[key] || String(cfg[key]).includes("PUT_")) {
-      throw new Error(`config.js is missing ${key}.`);
+      throw new Error(`${file} is missing ${key}.`);
     }
   }
+  cfg.__source = file;
   cfg.wsUrl = cfg.wsUrl || cfg.apiUrl;
   return cfg;
 }
