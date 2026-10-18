@@ -129,6 +129,33 @@ with it.
 
 ---
 
+## 3b. This must be its own VM
+
+`provision.sh` assumes the machine is empty, and three of its steps are
+destructive on one that is not:
+
+- the nginx site claims `default_server`, which catches every hostname no
+  other site matches — including requests meant for whatever already runs
+  there
+- `/etc/nginx/sites-enabled/default` is removed
+- `/etc/mongod.conf` is replaced wholesale and mongod becomes a replica set
+
+The script now refuses to run when it finds another nginx site, another
+mongo database, or a running app server, and names what it found. Overriding
+that is deliberate and narrow:
+
+```bash
+sudo bash provision.sh --repo <url> --shared-host --server-name seika.example.com
+```
+
+With `--shared-host` it does not claim `default_server`, keeps the existing
+default site, and refuses outright to touch a mongod whose `dbPath` is not
+the distribution default.
+
+Even so: give SEIKA its own VM. The Always Free tier allows several, and a
+gaming zone's wallet ledger sharing a database server with another product
+is a bad trade even on the days it works.
+
 ## 4. Running the provision
 
 From this Mac:
@@ -305,8 +332,11 @@ idempotent and takes seconds.
 Stated plainly, because a runbook that implies more confidence than exists is
 worse than no runbook:
 
-- **This has not been run on a real Oracle instance.** The logic is sound and
-  the traps are real and well-documented, but the first run is the first run.
+- **The first real run went onto a machine that was already serving another
+  application**, before the guard in §3b existed. The original script would
+  have claimed `default_server`, deleted the default site and rewritten
+  `/etc/mongod.conf` on that host. If that is your deployment, check the
+  other application before trusting this one — §11.
 - **The Windows kiosk lockdown has never run on real Windows hardware.** It is
   verified at the socket level (`apps/api/test/q-kiosk-lock.test.ts`, 9 cases)
   and by driving the shipped Electron app over CDP, but policy enforcement on an
@@ -317,6 +347,43 @@ worse than no runbook:
   Fine for a pilot; not fine for two.
 
 ---
+
+## 11. If it was installed on a machine that was already in use
+
+Read-only. None of this changes anything.
+
+```bash
+# What nginx actually serves now, and which site claims the default.
+ls -l /etc/nginx/sites-enabled/
+sudo nginx -T 2>/dev/null | grep -nE "server_name|default_server|listen "
+
+# Is the other application still answering on its own hostname?
+curl -sI -H "Host: the-other-app.example.com" http://127.0.0.1/ | head -3
+
+# Was its mongod config replaced? The original is kept beside it.
+ls -l /etc/mongod.conf*
+sudo grep -E "dbPath|bindIp|replSetName|authorization" /etc/mongod.conf
+
+# Which databases exist, and did the other app's survive?
+mongosh --quiet --eval 'db.adminCommand({listDatabases:1}).databases'
+
+# What SEIKA added.
+systemctl status seika-api --no-pager
+ls -l /etc/cron.d/seika-backup /etc/seika/ /opt/seika
+sudo iptables -L INPUT -n --line-numbers | head
+```
+
+To remove SEIKA from a shared machine without disturbing the rest:
+
+```bash
+sudo systemctl disable --now seika-api
+sudo rm -f /etc/systemd/system/seika-api.service /etc/nginx/sites-enabled/seika
+sudo systemctl daemon-reload
+# Restore the default site if it was removed, then:
+sudo nginx -t && sudo systemctl reload nginx
+# The database and /opt/seika are left in place on purpose — delete them
+# only once you are sure nothing there is wanted.
+```
 
 ## Quick reference
 
