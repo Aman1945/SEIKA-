@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { QrScanner } from "@/components/QrScanner";
 
 import type { SessionRow } from "@seika/types";
 
@@ -34,6 +35,7 @@ export default function PlayPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
 
   const balance = passport?.wallet.balance ?? 0;
 
@@ -62,6 +64,31 @@ export default function PlayPage() {
     void findLive();
   }, [findLive]);
 
+  /** Shared by the scanner and the paste field. */
+  const attachWithToken = useCallback(
+    async (token: string) => {
+      setScanning(false);
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await api.sessions.attach(token);
+        const full = await api.sessions.byId(res.sessionId);
+        setSession(full.session);
+        setStep("attached");
+        setQrToken("");
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? `That code did not work — ${err.message}. Codes expire after a minute, so scan again.`
+            : String(err)
+        );
+      } finally {
+        setBusy(false);
+      }
+    },
+    [api]
+  );
+
   /**
    * Attach straight from a scanned code.
    *
@@ -82,25 +109,9 @@ export default function PlayPage() {
     url.searchParams.delete("t");
     window.history.replaceState({}, "", url.pathname + url.search);
 
-    void (async () => {
-      setBusy(true);
-      setError(null);
-      try {
-        const res = await api.sessions.attach(scanned);
-        const full = await api.sessions.byId(res.sessionId);
-        setSession(full.session);
-        setStep("attached");
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? `That code did not work — ${err.message}. Codes expire after a minute, so scan again.`
-            : String(err)
-        );
-      } finally {
-        setBusy(false);
-      }
-    })();
-  }, [loading, step, api]);
+    void attachWithToken(scanned);
+  }, [loading, step, attachWithToken]);
+
 
   async function attach(e: React.FormEvent) {
     e.preventDefault();
@@ -294,11 +305,23 @@ export default function PlayPage() {
             <button className="btn--primary" disabled={busy || !qrToken.trim()}>
               {busy ? "Checking…" : "Attach to this PC"}
             </button>
-            <p className="small faint" style={{ marginBottom: 0, marginTop: 10 }}>
-              A camera scanner replaces this field on a phone with camera permission; the code is
-              short-lived either way.
-            </p>
           </form>
+
+          {scanning ? (
+            <QrScanner onToken={(t) => void attachWithToken(t)} onClose={() => setScanning(false)} />
+          ) : (
+            <button
+              className="btn btn--ghost"
+              style={{ width: "100%", marginTop: 10 }}
+              onClick={() => setScanning(true)}
+              disabled={busy}
+            >
+              Scan with the camera
+            </button>
+          )}
+          <p className="small faint" style={{ marginBottom: 0, marginTop: 10 }}>
+            The code on the PC screen changes every minute, so scan it when you are ready to play.
+          </p>
 
           {balance < 60 && (
             <div className="alert alert--info">

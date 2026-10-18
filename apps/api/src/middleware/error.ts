@@ -33,6 +33,22 @@ export function errorHandler(
     return;
   }
 
+  // A malformed id in the path. Mongoose throws CastError from findById, and
+  // without this every /api/<thing>/not-an-id answers 500 — which reads as a
+  // server fault, is logged as a bug, and buries the real ones. It also
+  // misleads: GET /api/sessions/history looked like a broken endpoint when the
+  // route is /history/list and "history" was being cast to an ObjectId.
+  const castErr = err as { name?: string; path?: string; kind?: string };
+  if (castErr?.name === "CastError") {
+    res.status(400).json({
+      error: {
+        code: "INVALID_ID",
+        message: `"${String((err as { value?: unknown }).value ?? "")}" is not a valid ${castErr.path ?? "id"}`,
+      },
+    });
+    return;
+  }
+
   // Mongo duplicate key
   if (typeof err === "object" && err && (err as { code?: number }).code === 11000) {
     res.status(409).json({ error: { code: "DUPLICATE", message: "Resource already exists" } });

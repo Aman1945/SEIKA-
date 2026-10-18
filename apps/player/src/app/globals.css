@@ -855,3 +855,53 @@ label {
     background: #171a2e;
   }
 }
+
+/* ─── Camera scanner ────────────────────────────────────────────────────────
+   Shown in place of the paste field once the player taps "Scan". The reticle
+   is only a guide — decoding reads the whole frame, so a code slightly
+   outside the box still works. */
+.scanner {
+  margin-top: 10px;
+}
+.scanner__frame {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #000;
+  box-shadow: var(--lift);
+}
+.scanner__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.scanner__reticle {
+  position: absolute;
+  inset: 16%;
+  border: 2px solid rgb(var(--glow-1) / 0.9);
+  border-radius: 14px;
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.35);
+}
+.scanner__hint {
+  margin: 10px 0;
+  text-align: center;
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+.scanner__error {
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--glass-1);
+  border: 1px solid rgb(255 255 255 / 0.08);
+}
+.scanner__error p {
+  margin: 0 0 12px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+/* Frames are read from here; it never needs to be visible. */
+.scanner__canvas {
+  display: none;
+}
