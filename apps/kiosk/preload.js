@@ -42,4 +42,11 @@ contextBridge.exposeInMainWorld("seika", {
    */
   lock: () => ipcRenderer.send("seika:request-lock"),
   staffEscape: (code) => ipcRenderer.invoke("seika:staff-escape", { code }),
+
+  /**
+   * Shuts the kiosk down. Main refuses this unless the PC has no usable
+   * config, where the lock is protecting nothing and the staff code cannot
+   * exist because it lives in the file that is missing.
+   */
+  emergencyExit: () => ipcRenderer.invoke("seika:emergency-exit"),
 });

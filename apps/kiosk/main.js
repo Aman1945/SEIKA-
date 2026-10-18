@@ -34,6 +34,23 @@ let powerBlocker = null;
 /** Locked until the server says otherwise. Never the other way round. */
 let locked = true;
 
+/**
+ * Recovery mode: the config could not be loaded, so this PC cannot identify
+ * itself, cannot start a session and cannot be unlocked by the server. It is
+ * not a kiosk — it is a locked screen with no way out.
+ *
+ * Staying locked here protects nothing. There is no session to end, no money
+ * to lose, and nobody can be billed. The only thing the lock achieves is
+ * trapping whoever is standing in front of it, and the staff escape does not
+ * help because that is configured in the very file that failed to load.
+ *
+ * So in this state, and only this state, the kiosk offers a plain way out.
+ */
+let recoveryMode = false;
+let recoveryReason = "";
+/** Set when an exit was authorised, so window-all-closed stops fighting it. */
+let exiting = false;
+
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 /**
@@ -364,6 +381,36 @@ function hashCode(value) {
   return crypto.createHash("sha256").update(String(value), "utf8").digest("hex");
 }
 
+/**
+ * In recovery mode the escape shortcut needs no code, because the code lives
+ * in the file that is missing. It is paired with a visible button on screen:
+ * a shortcut nobody knows about is not a way out.
+ */
+function registerRecoveryEscape() {
+  try {
+    globalShortcut.register(ESCAPE_ACCELERATOR, () => emergencyExit("shortcut"));
+  } catch {
+    // The on-screen button is the one that has to work.
+  }
+}
+
+/** Shuts the kiosk down. Refused unless this PC is genuinely unconfigured. */
+function emergencyExit(via) {
+  if (!recoveryMode) return { ok: false, reason: "Only available on an unconfigured PC" };
+  logger(`emergency exit via ${via}`);
+  exiting = true;
+  locked = false;
+  stopAssertingLock();
+  globalShortcut.unregisterAll();
+  if (win && !win.isDestroyed()) {
+    win.setKiosk(false);
+    win.setAlwaysOnTop(false);
+    win.destroy();
+  }
+  app.quit();
+  return { ok: true };
+}
+
 function registerStaffEscape() {
   if (!config?.staffEscapeCodeHash && !config?.staffEscapeCode) return;
   try {
@@ -521,11 +568,20 @@ function registerIpc() {
   });
 
   ipcMain.handle("seika:staff-escape", (_e, { code }) => attemptStaffEscape(code));
+  ipcMain.handle("seika:emergency-exit", () => emergencyExit("button"));
 
+  // Null-safe: in recovery mode there is no config, and a handler that threw
+  // here left the renderer's getConfig() rejected — so the screen kept its
+  // placeholder label and showed nothing about what was actually wrong.
+  //
+  // The renderer asks for this on load rather than waiting to be told, because
+  // a message pushed at startup races the page and usually loses.
   ipcMain.handle("seika:config", () => ({
-    pcId: config.pcId,
-    apiUrl: config.apiUrl,
-    zoneName: config.zoneName ?? null,
+    pcId: config?.pcId ?? null,
+    apiUrl: config?.apiUrl ?? null,
+    zoneName: config?.zoneName ?? null,
+    recoveryMode,
+    recoveryReason,
   }));
 
   // The renderer may ask to lock, never to unlock: only the server unlocks.
@@ -540,11 +596,14 @@ app.whenReady().then(() => {
   try {
     config = loadConfig();
   } catch (err) {
-    // Misconfigured means locked, with the reason on screen. Anything else
-    // hands out free play on a PC nobody can account for.
+    // Misconfigured means locked — anything else hands out free play on a PC
+    // nobody can account for. But it also means recovery mode, so the person
+    // in front of it can get out and fix the config.
+    recoveryMode = true;
+    recoveryReason = err.message;
     createWindow();
     applyLock(true, err.message);
-    send("seika:fatal", { message: err.message });
+    registerRecoveryEscape();
     return;
   }
 
@@ -559,6 +618,7 @@ app.whenReady().then(() => {
 
 /** A player closing the lock screen must not leave the PC open. */
 app.on("window-all-closed", (e) => {
+  if (exiting) return;
   e.preventDefault?.();
   if (app.isReady() && (!win || win.isDestroyed())) {
     createWindow();

@@ -186,6 +186,42 @@
 
   body[data-locked="false"] .locked-view { display: none; }
   body[data-locked="false"] .unlocked { display: block; }
+
+  /* ─── Recovery ──────────────────────────────────────────────────────────
+     Shown only when this PC has no usable config. Deliberately plain and
+     obvious: it is the way out for someone standing at a machine that will
+     not otherwise let them go. */
+  .exit-btn {
+    display: block;
+    margin: 1.4rem auto 0;
+    padding: 0.85rem 2rem;
+    font: inherit;
+    font-size: 1rem;
+    font-weight: 600;
+    color: #06111a;
+    background: linear-gradient(180deg, #7fe3c4, #4cc3a4);
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    box-shadow: var(--lift, 0 10px 30px rgb(0 0 0 / 0.35));
+  }
+  .exit-btn:hover:not(:disabled) { filter: brightness(1.08); }
+  .exit-btn:active:not(:disabled) { transform: translateY(1px); }
+  .exit-btn:disabled { opacity: 0.6; cursor: default; }
+  .exit-details {
+    margin: 1rem auto 0;
+    max-width: 42rem;
+    font-size: 0.8rem;
+    opacity: 0.65;
+    text-align: left;
+  }
+  .exit-details summary { cursor: pointer; text-align: center; }
+  .exit-details pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    margin-top: 0.6rem;
+    line-height: 1.5;
+  }
 </style>
 
 <div class="banner" id="banner"></div>
@@ -198,7 +234,7 @@
     <div id="qrHolder" class="qr-placeholder">Getting a code…</div>
   </div>
 
-  <div class="instruction">Scan this with the SEIKA app</div>
+  <div class="instruction" id="scanTitle">Scan this with the SEIKA app</div>
   <div class="sub" id="reason">
     Scanning tells us who you are. The PC unlocks once you choose how long to
     play and that is paid for.
@@ -255,8 +291,51 @@
   let qrExpiresAt = null;
 
   seika.getConfig().then((cfg) => {
+    if (cfg.recoveryMode) return showRecovery(cfg.recoveryReason);
     $("pcLabel").textContent = `${cfg.zoneName ?? "SEIKA"} · PC ${String(cfg.pcId).slice(-6)}`;
   });
+
+  /**
+   * This PC has no usable config, so it cannot run a session, cannot be
+   * unlocked by the server, and has no staff code — that lives in the file
+   * that is missing. Without a visible way out, whoever is standing here is
+   * stuck with a full-screen window and no recourse.
+   */
+  function showRecovery(reason) {
+    $("pcLabel").textContent = "Not set up yet";
+    $("qrHolder").innerHTML =
+      '<div class="qr-placeholder">This PC has not been configured.</div>';
+    $("scanTitle").textContent = "Setup needed";
+    $("reason").textContent =
+      "This PC cannot reach its zone because its settings are missing. " +
+      "Nobody can be charged and no session can start, so you can close the " +
+      "lock screen and finish setting it up.";
+
+    const exit = document.createElement("button");
+    exit.id = "exitKiosk";
+    exit.className = "exit-btn";
+    exit.textContent = "Close the lock screen";
+    exit.onclick = async () => {
+      exit.disabled = true;
+      exit.textContent = "Closing…";
+      const res = await seika.emergencyExit();
+      if (!res?.ok) {
+        exit.disabled = false;
+        exit.textContent = "Close the lock screen";
+        $("reason").textContent = res?.reason ?? "Could not close.";
+      }
+    };
+
+    const details = document.createElement("details");
+    details.className = "exit-details";
+    details.innerHTML =
+      "<summary>What is missing</summary><pre>" +
+      String(reason || "").replace(/[<>&]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[c])) +
+      "</pre>";
+
+    $("reason").insertAdjacentElement("afterend", exit);
+    exit.insertAdjacentElement("afterend", details);
+  }
 
   seika.onState(({ locked, reason }) => {
     document.body.dataset.locked = String(locked);
