@@ -337,7 +337,17 @@ function startQrLoop() {
   const refresh = async () => {
     try {
       const { token, expiresInSeconds } = await api.qrToken(config.staffToken);
-      const dataUrl = await QRCode.toDataURL(token, {
+
+      // The QR holds a LINK, not the bare token. A phone's own camera then
+      // works as the scanner: point, tap the notification, and the player app
+      // opens already attached to this PC. Encoding the raw token meant the
+      // only way in was typing a JWT off the screen, which nobody can do — so
+      // in practice there was no way to scan at all.
+      const payload = config.playerUrl
+        ? `${String(config.playerUrl).replace(/\/$/, "")}/play/?t=${encodeURIComponent(token)}`
+        : token;
+
+      const dataUrl = await QRCode.toDataURL(payload, {
         errorCorrectionLevel: "M",
         margin: 2,
         width: 320,

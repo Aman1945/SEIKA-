@@ -62,6 +62,46 @@ export default function PlayPage() {
     void findLive();
   }, [findLive]);
 
+  /**
+   * Attach straight from a scanned code.
+   *
+   * The PC's QR holds a link to this page with the token on it, so the phone's
+   * own camera is the scanner — tap the notification and you land here already
+   * attached. Typing the token by hand was never realistic: it is a JWT.
+   *
+   * The token is stripped from the address bar immediately. It is single use
+   * and short lived, but it should not sit in history or get shared when
+   * someone sends a friend "the link".
+   */
+  useEffect(() => {
+    if (loading || step !== "idle") return;
+    const url = new URL(window.location.href);
+    const scanned = url.searchParams.get("t");
+    if (!scanned) return;
+
+    url.searchParams.delete("t");
+    window.history.replaceState({}, "", url.pathname + url.search);
+
+    void (async () => {
+      setBusy(true);
+      setError(null);
+      try {
+        const res = await api.sessions.attach(scanned);
+        const full = await api.sessions.byId(res.sessionId);
+        setSession(full.session);
+        setStep("attached");
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? `That code did not work — ${err.message}. Codes expire after a minute, so scan again.`
+            : String(err)
+        );
+      } finally {
+        setBusy(false);
+      }
+    })();
+  }, [loading, step, api]);
+
   async function attach(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);

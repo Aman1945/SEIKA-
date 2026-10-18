@@ -11,6 +11,12 @@ window.SEIKA_CONFIG = {
   pcId: "PUT_PC_ID_HERE",
   clientKey: "PUT_PC_CLIENT_KEY_HERE",
 
+  // Where the player app is served. The lock screen's QR encodes a link to
+  // it, so a phone's built-in camera is the scanner — no app install needed
+  // just to scan. Leave it unset and the QR falls back to the bare token,
+  // which only the SEIKA app's own scanner can use.
+  playerUrl: "http://ZONE-HOST/demo/player",
+
   // Shown on the lock screen.
   zoneName: "SEIKA",
 

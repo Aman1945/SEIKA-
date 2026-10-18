@@ -51,6 +51,9 @@ param(
   [string]$ApiUrl,
   [string]$PcId,
   [string]$ClientKey,
+  # Where the player app is served. The QR on the lock screen encodes a link
+  # to it, so a phone's own camera can scan it.
+  [string]$PlayerUrl,
   [string]$ZoneName = "SEIKA",
   [string]$StaffEscapeCode
 )
@@ -104,6 +107,7 @@ window.SEIKA_CONFIG = {
   wsUrl: "$ApiUrl",
   pcId: "$PcId",
   clientKey: "$ClientKey",
+  playerUrl: "$(if ($PlayerUrl) { $PlayerUrl } else { $ApiUrl })",
   zoneName: "$ZoneName",
 $escapeLine
   gameRoots: {},
