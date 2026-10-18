@@ -251,6 +251,55 @@ function stopAssertingLock() {
 }
 
 /**
+ * Gets the lock screen out of the way, leaving the player their desktop.
+ *
+ * On macOS a kiosk window lives in its own Space, and leaving full screen is
+ * an animated, asynchronous transition. Hiding the window partway through
+ * leaves the machine sitting in an empty Space — a blank screen with nothing
+ * in it and no obvious way back, which is worse than staying locked. So leave
+ * full screen first and hide only once macOS says it is done.
+ *
+ * Windows has no Spaces and hides immediately, which is why this was invisible
+ * on the platform the kiosk actually ships to.
+ */
+function revealDesktop() {
+  if (!win || win.isDestroyed()) return;
+
+  const state = (when) =>
+    logger(
+      `reveal ${when}: visible=${win.isVisible()} fullscreen=${win.isFullScreen()} kiosk=${win.isKiosk()}`
+    );
+  state("before");
+
+  if (process.platform === "darwin" && (win.isKiosk() || win.isFullScreen())) {
+    // The event and the fallback timer both fire in the normal case; the
+    // window only needs hiding once.
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      // Re-checked: a session can start again while the animation runs, and
+      // hiding then would unlock a PC that is supposed to be locked.
+      if (!locked && win && !win.isDestroyed()) {
+        win.hide();
+        state("after");
+      }
+    };
+    win.once("leave-full-screen", done);
+    // A transition that never reports back must not strand the window on
+    // screen for ever.
+    setTimeout(done, 1500);
+    win.setKiosk(false);
+    win.setFullScreen(false);
+    return;
+  }
+
+  win.setKiosk(false);
+  win.hide();
+  state("after");
+}
+
+/**
  * Applies the lock state.
  *
  * Locked is the resting state: if anything is unclear — no config, no network,
@@ -275,8 +324,7 @@ function applyLock(next, reason) {
     stopAssertingLock();
     globalShortcut.unregisterAll();
     win.setAlwaysOnTop(false);
-    win.setKiosk(false);
-    win.hide();
+    revealDesktop();
     // The staff escape stays registered while unlocked too, so a member of
     // staff can always take a PC back for maintenance.
     registerStaffEscape();
