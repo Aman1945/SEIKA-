@@ -382,7 +382,7 @@ let refreshQrNow = async () => {};
 function startQrLoop() {
   const refresh = async () => {
     try {
-      const { token, expiresInSeconds } = await api.qrToken(config.staffToken);
+      const { token, expiresInSeconds, pairCode } = await api.qrToken(config.staffToken);
 
       // The QR holds a LINK, not the bare token. A phone's own camera then
       // works as the scanner: point, tap the notification, and the player app
@@ -399,7 +399,7 @@ function startQrLoop() {
         width: 320,
         color: { dark: "#0a0c12", light: "#ffffff" },
       });
-      lastQr = { dataUrl, token, expiresInSeconds };
+      lastQr = { dataUrl, token, expiresInSeconds, pairCode };
       send("seika:qr", lastQr);
     } catch (err) {
       send("seika:qr", { error: err.message });

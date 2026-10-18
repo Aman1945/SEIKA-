@@ -222,6 +222,29 @@
     margin-top: 0.6rem;
     line-height: 1.5;
   }
+
+  /* ─── Typed pairing code ────────────────────────────────────────────────
+     The way in for a player who cannot scan: cracked camera, no permission,
+     or a screen too dirty to read optically. */
+  .paircode {
+    margin-top: 1.1rem;
+    text-align: center;
+  }
+  .paircode__label {
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    opacity: 0.55;
+  }
+  .paircode__digits {
+    margin-top: 0.35rem;
+    font-family: var(--font-display, inherit);
+    font-size: clamp(1.6rem, 3.4vw, 2.4rem);
+    letter-spacing: 0.14em;
+    font-variant-numeric: tabular-nums;
+    color: #eaf2ff;
+    text-shadow: 0 0 24px rgb(var(--glow-1) / 0.45);
+  }
 </style>
 
 <div class="banner" id="banner"></div>
@@ -232,6 +255,11 @@
 
   <div class="qr-card">
     <div id="qrHolder" class="qr-placeholder">Getting a code…</div>
+  </div>
+
+  <div class="paircode" id="pairCodeBox" hidden>
+    <div class="paircode__label">or type this code in the app</div>
+    <div class="paircode__digits" id="pairCode">—</div>
   </div>
 
   <div class="instruction" id="scanTitle">Scan this with the SEIKA app</div>
@@ -346,9 +374,21 @@
     const holder = $("qrHolder");
     if (payload.error) {
       holder.innerHTML = '<div class="qr-placeholder">No code — the PC cannot reach the zone server.</div>';
+      $("pairCodeBox").hidden = true;
       qrExpiresAt = null;
       return;
     }
+    const box = $("pairCodeBox");
+    if (payload.pairCode) {
+      // Grouped 4-3-3. Ten digits in one run is read wrong about as often as
+      // it is read right, and this is typed on a phone while standing up.
+      const c = String(payload.pairCode);
+      $("pairCode").textContent = `${c.slice(0, 4)} ${c.slice(4, 7)} ${c.slice(7)}`;
+      box.hidden = false;
+    } else {
+      box.hidden = true;
+    }
+
     const img = new Image();
     img.src = payload.dataUrl;
     img.alt = "Scan to attach to this PC";

@@ -7,6 +7,7 @@ import { requireAuth } from "../../middleware/auth.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { PC } from "../../models/PC.js";
 import { Session } from "../../models/Session.js";
+import { issuePairingCode } from "../../common/pairingCode.js";
 import { signQrToken } from "../../common/qr.js";
 import { emitToZone, emitToPc } from "../realtime/io.js";
 import { audit } from "../audit/audit.service.js";
@@ -72,7 +73,10 @@ pcRouter.post(
     const pc = await PC.findById(req.params.id);
     if (!pc) throw notFound("PC not found");
     const qr = signQrToken(String(pc._id));
-    res.json({ ok: true, pcId: String(pc._id), ...qr });
+    // Issued together so the screen can never show a code and a QR that point
+    // at different moments, and so one refresh retires both.
+    const pair = await issuePairingCode(String(pc._id), String(pc.zoneId));
+    res.json({ ok: true, pcId: String(pc._id), ...qr, pairCode: pair.code });
   })
 );
 

@@ -109,6 +109,12 @@ export function createApi(client: SeikaClient) {
     },
 
     sessions: {
+      /** Attach by typing the code on the PC screen, for a player who cannot scan. */
+      attachCode: (code: string) =>
+        post<{ ok: true; sessionId: string; status: string; note: string }>(
+          "/api/sessions/attach-code",
+          { code }
+        ),
       history: (params: { limit?: number; skip?: number } = {}) =>
         get<{ ok: true; total: number; sessions: SessionRow[] }>("/api/sessions/history/list", params),
       byId: (id: string) => get<{ ok: true; session: SessionRow }>(`/api/sessions/${id}`),

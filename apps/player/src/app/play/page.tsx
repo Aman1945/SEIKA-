@@ -18,6 +18,17 @@ import { Elapsed, ErrorNote, Loading, duration, money } from "@/components/ui";
  */
 type Step = "idle" | "attached" | "playing";
 
+/** The PC shows ten digits; this is the only place that number is assumed. */
+const PAIR_CODE_DIGITS = 10;
+
+const digitsOf = (v: string) => v.replace(/\D/g, "").slice(0, PAIR_CODE_DIGITS);
+
+/** Mirrors the 4-3-3 grouping on the PC screen, so the two read alike. */
+function formatPairCode(value: string): string {
+  const d = digitsOf(value);
+  return [d.slice(0, 4), d.slice(4, 7), d.slice(7)].filter(Boolean).join(" ");
+}
+
 const BLOCKS = [
   { minutes: 60, label: "1 hour" },
   { minutes: 120, label: "2 hours" },
@@ -118,7 +129,7 @@ export default function PlayPage() {
     setBusy(true);
     setError(null);
     try {
-      const res = await api.sessions.attach(qrToken.trim());
+      const res = await api.sessions.attachCode(digitsOf(qrToken));
       const full = await api.sessions.byId(res.sessionId);
       setSession(full.session);
       setStep("attached");
@@ -296,13 +307,19 @@ export default function PlayPage() {
               <input
                 id="qr"
                 value={qrToken}
-                onChange={(e) => setQrToken(e.target.value)}
-                placeholder="Paste or scan"
-                autoComplete="off"
+                onChange={(e) => setQrToken(formatPairCode(e.target.value))}
+                placeholder="0000 000 000"
+                // Brings up the number pad instead of a keyboard, and stops a
+                // phone trying to autocorrect a code.
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                autoCorrect="off"
+                spellCheck={false}
+                maxLength={PAIR_CODE_DIGITS + 2}
                 required
               />
             </div>
-            <button className="btn--primary" disabled={busy || !qrToken.trim()}>
+            <button className="btn--primary" disabled={busy || digitsOf(qrToken).length !== PAIR_CODE_DIGITS}>
               {busy ? "Checking…" : "Attach to this PC"}
             </button>
           </form>

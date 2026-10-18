@@ -9,6 +9,7 @@ import { startSession, endSession, refundSession } from "./session.service.js";
 import { requireRole } from "../../middleware/rbac.js";
 import { emitToZone } from "../realtime/io.js";
 import { Session } from "../../models/Session.js";
+import { redeemPairingCode } from "../../common/pairingCode.js";
 import { audit } from "../audit/audit.service.js";
 import type { PaymentSource } from "../../models/enums.js";
 
@@ -30,6 +31,41 @@ sessionRouter.post(
     const session = await attachPlayer(pcId, req.auth!.sub);
     emitToZone(String(session.zoneId), "qr:scanned", {
       pcId,
+      sessionId: String(session._id),
+      playerId: req.auth!.sub,
+    });
+    res.status(201).json({
+      ok: true,
+      sessionId: String(session._id),
+      status: session.status,
+      note: "PC locked — awaiting payment authorization",
+    });
+  })
+);
+
+/**
+ * Attach by typing the code on the PC screen, for a player who cannot scan.
+ *
+ * Same outcome as /attach — PENDING_AUTH, PC still locked — because the only
+ * difference is how the player told us which PC they are sitting at. Nothing
+ * about payment or unlocking changes.
+ */
+sessionRouter.post(
+  "/attach-code",
+  asyncHandler(async (req, res) => {
+    if (req.auth!.typ !== "player") throw forbidden("Players only");
+    const { code } = z.object({ code: z.string() }).parse(req.body);
+
+    const claimed = await redeemPairingCode(code, req.auth!.sub);
+    if (!claimed) {
+      // One message for wrong, expired, and already-used. Telling them apart
+      // would let someone sweep the number space and learn which codes exist.
+      throw badRequest("That code is not valid any more. Check the PC screen for the current one.");
+    }
+
+    const session = await attachPlayer(claimed.pcId, req.auth!.sub);
+    emitToZone(String(session.zoneId), "qr:scanned", {
+      pcId: claimed.pcId,
       sessionId: String(session._id),
       playerId: req.auth!.sub,
     });
