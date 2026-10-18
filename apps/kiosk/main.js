@@ -46,6 +46,20 @@ let locked = true;
  *
  * So in this state, and only this state, the kiosk offers a plain way out.
  */
+/**
+ * The last state each push channel sent.
+ *
+ * The renderer only learns about the socket, the heartbeat and the QR from
+ * pushes, and those fire on change. If the window is recreated — a crash, a
+ * closed window, the watchdog — the new page starts blank and no event is
+ * coming, because nothing changed. The kiosk then sits on "Connecting…" with
+ * no QR while being perfectly connected, and a player cannot scan a PC that
+ * is working fine.
+ */
+let lastConnected = false;
+let lastHeartbeatOk = false;
+let lastQr = null;
+
 let recoveryMode = false;
 let recoveryReason = "";
 /** Set when an exit was authorised, so window-all-closed stops fighting it. */
@@ -112,15 +126,25 @@ function loadConfig() {
 
 // ─── Window and the physical lock ────────────────────────────────────────────
 
+/**
+ * Windowed mode for local development.
+ *
+ * The kiosk takes the whole screen and re-asserts itself every second, which
+ * is correct on a gaming PC and makes the thing untestable anywhere else — you
+ * cannot watch it behave because it has taken the machine you are watching on.
+ *
+ * Honoured only in an unpackaged build. An installed kiosk ignores the
+ * variable entirely, so this cannot be used to get a free PC.
+ */
+const WINDOWED = !app.isPackaged && process.env.SEIKA_WINDOWED === "1";
+
 function createWindow() {
   win = new BrowserWindow({
-    fullscreen: true,
-    kiosk: true,
-    alwaysOnTop: true,
-    frame: false,
-    closable: false,
-    minimizable: false,
-    skipTaskbar: true,
+    ...(WINDOWED
+      ? { width: 1100, height: 760, fullscreen: false, kiosk: false, alwaysOnTop: false, frame: true, closable: true }
+      : { fullscreen: true, kiosk: true, alwaysOnTop: true, frame: false, closable: false }),
+    minimizable: WINDOWED,
+    skipTaskbar: !WINDOWED,
     backgroundColor: "#0a0c12",
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -129,6 +153,19 @@ function createWindow() {
       // The lock screen loads only local files; it has no reason to navigate.
       sandbox: true,
     },
+  });
+
+  // Replay the current state to every fresh page. Without this, a window that
+  // is recreated shows "Connecting…" and no QR until something happens to
+  // change — which, on a healthy kiosk, is never.
+  win.webContents.on("did-finish-load", () => {
+    send("seika:connection", { connected: lastConnected });
+    send("seika:heartbeat", { ok: lastHeartbeatOk });
+    if (lastQr) send("seika:qr", lastQr);
+    if (recoveryMode) send("seika:fatal", { message: recoveryReason });
+    // The QR expires in about a minute, so a stale one is worth refreshing
+    // rather than showing a code that will fail when scanned.
+    if (!recoveryMode && api) void refreshQrNow();
   });
 
   win.loadFile(path.join(__dirname, "renderer", "index.html"));
@@ -197,6 +234,7 @@ let assertTimer = null;
 
 function startAssertingLock() {
   stopAssertingLock();
+  if (WINDOWED) return; // would fight the developer for focus once a second
   assertTimer = setInterval(() => {
     if (!locked || !win || win.isDestroyed()) return;
     if (!win.isVisible()) win.show();
@@ -224,7 +262,7 @@ function applyLock(next, reason) {
   if (!win || win.isDestroyed()) return;
 
   if (locked) {
-    win.setKiosk(true);
+    if (!WINDOWED) win.setKiosk(true);
     win.setAlwaysOnTop(true, "screen-saver");
     win.show();
     win.focus();
@@ -258,12 +296,16 @@ function connectRealtime() {
 
   const join = () => {
     socket.emit("join:pc", { pcId: config.pcId, clientKey: config.clientKey });
+    lastConnected = true;
     send("seika:connection", { connected: true });
   };
 
   socket.on("connect", join);
   socket.io.on("reconnect", join);
-  socket.on("disconnect", () => send("seika:connection", { connected: false }));
+  socket.on("disconnect", () => {
+    lastConnected = false;
+    send("seika:connection", { connected: false });
+  });
 
   socket.on("error:auth", (payload) => {
     // A wrong clientKey means this PC is not who it claims to be. Stay locked
@@ -315,10 +357,12 @@ function startHeartbeat() {
   const beat = async () => {
     try {
       await api.heartbeat();
+      lastHeartbeatOk = true;
       send("seika:heartbeat", { ok: true, at: Date.now() });
       // Connectivity is back: anything the escape owed the server goes now.
       await flushEscapeReports();
     } catch (err) {
+      lastHeartbeatOk = false;
       send("seika:heartbeat", { ok: false, error: err.message });
     }
   };
@@ -333,6 +377,8 @@ function startHeartbeat() {
  * zone's network can be down while its LAN is fine, and a PC id should not be
  * sent to a third party to be drawn.
  */
+let refreshQrNow = async () => {};
+
 function startQrLoop() {
   const refresh = async () => {
     try {
@@ -353,11 +399,13 @@ function startQrLoop() {
         width: 320,
         color: { dark: "#0a0c12", light: "#ffffff" },
       });
-      send("seika:qr", { dataUrl, token, expiresInSeconds });
+      lastQr = { dataUrl, token, expiresInSeconds };
+      send("seika:qr", lastQr);
     } catch (err) {
       send("seika:qr", { error: err.message });
     }
   };
+  refreshQrNow = refresh; // so a reloaded page can pull a fresh code at once
   void refresh();
   qrTimer = setInterval(refresh, QR_REFRESH_MS);
 }
