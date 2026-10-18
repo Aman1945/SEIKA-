@@ -280,6 +280,35 @@ is open to anyone on the same café wifi.
 
 ---
 
+## 7b. TLS without owning a domain
+
+Let's Encrypt will not issue for a bare IP, and some things genuinely need a
+secure origin rather than merely preferring one — the player app's camera
+scanner is simply absent over plain http, because `getUserMedia` does not
+exist outside a secure context.
+
+`sslip.io` resolves any `a-b-c-d.sslip.io` to that IP, with no account and no
+DNS of your own, and Let's Encrypt will issue for it:
+
+```bash
+# 1. The seika site must answer for that hostname, or the ACME challenge
+#    lands on whichever server block nginx picks as the default.
+#    server_name 203.0.113.10 203-0-113-10.sslip.io;
+#
+# 2. The challenge must not be proxied to the API, which would 404 it.
+#    location /.well-known/acme-challenge/ { root /var/www/certbot; }
+#
+# 3. Then, without --nginx, so nothing else on the box is rewritten:
+sudo certbot certonly --webroot -w /var/www/certbot \
+  -d 203-0-113-10.sslip.io --agree-tos --register-unsafely-without-email
+```
+
+Add a `listen 443 ssl` block pointing at the issued certificate. Renewal is
+scheduled by certbot itself; `certbot renew --dry-run` proves it.
+
+This is a demo-grade answer. The hostname is ugly and it ties the certificate
+to an IP you may not keep. Use a real subdomain for anything a customer sees.
+
 ## 8. Backups
 
 The wallet ledger **is** the money. Balances are derived from it by summation and
