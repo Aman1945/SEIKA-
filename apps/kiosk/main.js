@@ -352,7 +352,7 @@ function launchGame(name) {
  * Windows has no Spaces and hides immediately, which is why this was invisible
  * on the platform the kiosk actually ships to.
  */
-function revealDesktop() {
+function revealDesktop({ toDesktop = false } = {}) {
   if (!win || win.isDestroyed()) return;
 
   const state = (when) =>
@@ -365,12 +365,13 @@ function revealDesktop() {
   // starts a game, watches their time and orders from their seat. It must not
   // behave like the lock, though: they need to reach the game they just
   // started, so it gives up focus, can be minimised, and is not on top.
-  const toLauncher = () => {
+  const finish = () => {
     if (locked || !win || win.isDestroyed()) return;
     win.setMinimizable(true);
     win.setClosable(true);
     win.setSkipTaskbar(false);
-    win.show();
+    if (toDesktop) win.hide();
+    else win.show();
     state("after");
   };
 
@@ -382,7 +383,7 @@ function revealDesktop() {
     const done = () => {
       if (settled) return;
       settled = true;
-      toLauncher();
+      finish();
     };
     win.once("leave-full-screen", done);
     setTimeout(done, 1500);
@@ -393,7 +394,7 @@ function revealDesktop() {
 
   win.setKiosk(false);
   win.setFullScreen(false);
-  toLauncher();
+  finish();
 }
 
 /**
@@ -403,7 +404,7 @@ function revealDesktop() {
  * an unknown command — the PC stays locked. A kiosk that fails open is a kiosk
  * that gives away free play.
  */
-function applyLock(next, reason) {
+function applyLock(next, reason, opts = {}) {
   locked = Boolean(next);
   if (!win || win.isDestroyed()) return;
 
@@ -421,7 +422,10 @@ function applyLock(next, reason) {
     stopAssertingLock();
     globalShortcut.unregisterAll();
     win.setAlwaysOnTop(false);
-    revealDesktop();
+    // Maintenance hands the machine to staff, so the lock screen gets out of
+    // the way completely. A player's session shows the launcher instead,
+    // because that is where they start a game and watch their time.
+    revealDesktop({ toDesktop: Boolean(opts.maintenance) });
     // The staff escape stays registered while unlocked too, so a member of
     // staff can always take a PC back for maintenance.
     registerStaffEscape();
@@ -659,7 +663,7 @@ function attemptStaffEscape(code) {
     return { ok: false, reason: "That code is not right" };
   }
 
-  applyLock(false, "Unlocked by staff for maintenance");
+  applyLock(false, "Unlocked by staff for maintenance", { maintenance: true });
   reportEscape({ at: new Date().toISOString() });
   return { ok: true };
 }
