@@ -33,6 +33,26 @@ if (-not (Test-Path $exe)) {
   exit 1
 }
 
+# Staff asked for the machine. The kiosk writes this file when the escape
+# code is accepted, and quits; relaunching it a minute later would make the
+# PC impossible to service or uninstall. The file carries its own expiry so a
+# maintenance window cannot be left open by someone forgetting about it.
+$flag = Join-Path $env:ProgramData "SEIKA\maintenance.json"
+if (Test-Path $flag) {
+  try {
+    $until = (Get-Content $flag -Raw | ConvertFrom-Json).until
+    if ([DateTime]::Parse($until).ToUniversalTime() -gt (Get-Date).ToUniversalTime()) {
+      exit 0
+    }
+    Write-Log "maintenance window expired — resuming"
+    Remove-Item $flag -Force -ErrorAction SilentlyContinue
+  } catch {
+    # An unreadable flag must not keep a zone's PC offline indefinitely.
+    Write-Log "maintenance flag unreadable — ignoring it"
+    Remove-Item $flag -Force -ErrorAction SilentlyContinue
+  }
+}
+
 if (Get-Process -Name "SEIKA" -ErrorAction SilentlyContinue) {
   exit 0   # running, nothing to do
 }

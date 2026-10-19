@@ -738,6 +738,57 @@ function registerRecoveryEscape() {
   }
 }
 
+/** How long staff get before the watchdog starts the kiosk again. */
+const MAINTENANCE_MINUTES = 30;
+
+/**
+ * Tells the watchdog to leave the machine alone for a while.
+ *
+ * Staff who entered the escape code want the PC — to fix something, or to
+ * uninstall. Quitting without this would be pointless: the watchdog runs
+ * every minute and would put the kiosk straight back, and an uninstaller
+ * cannot remove a program that keeps restarting.
+ *
+ * The window carries its own expiry so a PC cannot be left unguarded by
+ * someone who walked away, and so a zone does not need a second ritual to
+ * put it back.
+ */
+function openMaintenanceWindow() {
+  try {
+    const dir =
+      process.platform === "win32"
+        ? path.join(process.env.ProgramData || "C:\\ProgramData", "SEIKA")
+        : path.dirname(config?.__source ?? __dirname);
+    fs.mkdirSync(dir, { recursive: true });
+    const until = new Date(Date.now() + MAINTENANCE_MINUTES * 60_000).toISOString();
+    fs.writeFileSync(path.join(dir, "maintenance.json"), JSON.stringify({ until }, null, 2));
+    logger(`maintenance window open until ${until}`);
+  } catch (err) {
+    // Worth saying, not worth refusing the escape over: staff still get the
+    // desktop, they just may have to race the watchdog.
+    logger(`could not open a maintenance window: ${err.message}`);
+  }
+}
+
+/** Closes the kiosk for real, so the machine can be serviced or uninstalled. */
+function quitForMaintenance() {
+  exiting = true;
+  locked = false;
+  stopAssertingLock();
+  globalShortcut.unregisterAll();
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  if (qrTimer) clearInterval(qrTimer);
+  try {
+    socket?.disconnect();
+  } catch {}
+  if (win && !win.isDestroyed()) {
+    win.setKiosk(false);
+    win.setAlwaysOnTop(false);
+    win.destroy();
+  }
+  app.quit();
+}
+
 /** Shuts the kiosk down. Refused unless this PC is genuinely unconfigured. */
 function emergencyExit(via) {
   if (!recoveryMode) return { ok: false, reason: "Only available on an unconfigured PC" };
@@ -789,8 +840,13 @@ function attemptStaffEscape(code) {
     return { ok: false, reason: "That code is not right" };
   }
 
-  applyLock(false, "Unlocked by staff for maintenance", { maintenance: true });
   reportEscape({ at: new Date().toISOString() });
+  // Reported before quitting: once the process is gone there is nothing left
+  // to send it with, and a staff escape that is never recorded is exactly the
+  // one worth recording.
+  openMaintenanceWindow();
+  applyLock(false, "Unlocked by staff for maintenance", { maintenance: true });
+  quitForMaintenance();
   return { ok: true };
 }
 
