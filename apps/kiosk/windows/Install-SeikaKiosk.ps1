@@ -55,7 +55,15 @@ param(
   # to it, so a phone's own camera can scan it.
   [string]$PlayerUrl,
   [string]$ZoneName = "SEIKA",
-  [string]$StaffEscapeCode
+  [string]$StaffEscapeCode,
+
+  # Ctrl+Alt+Del keeps its menu unless you ask for it to be stripped. It is
+  # the last way back into a machine that is misbehaving, and it should be
+  # the last thing taken away — once the rest is proven on real hardware.
+  [switch]$LockCtrlAltDel,
+
+  # Skip the lockdown policies entirely (leaves only the kiosk app itself).
+  [switch]$NoHarden
 )
 
 $ErrorActionPreference = "Stop"
@@ -151,9 +159,18 @@ Set-ItemProperty -Path $policySystem -Name "DisableTaskMgr" -Value 1 -Type DWord
 # remove every option from the screen it opens, so it becomes a dead end.
 
 Write-Step "Emptying the Ctrl+Alt+Del screen"
-Set-ItemProperty -Path $policySystem -Name "DisableChangePassword"  -Value 1 -Type DWord
-Set-ItemProperty -Path $policySystem -Name "DisableLockWorkstation" -Value 1 -Type DWord
-Set-ItemProperty -Path $policySystem -Name "HideFastUserSwitching"  -Value 1 -Type DWord
+if ($LockCtrlAltDel) {
+  Set-ItemProperty -Path $policySystem -Name "DisableChangePassword"  -Value 1 -Type DWord
+  Set-ItemProperty -Path $policySystem -Name "DisableLockWorkstation" -Value 1 -Type DWord
+  Set-ItemProperty -Path $policySystem -Name "HideFastUserSwitching"  -Value 1 -Type DWord
+  Write-Ok "Ctrl+Alt+Del stripped"
+} else {
+  # Deliberately left working. Pass -LockCtrlAltDel once the rest is proven.
+  Remove-ItemProperty -Path $policySystem -Name "DisableChangePassword"  -ErrorAction SilentlyContinue
+  Remove-ItemProperty -Path $policySystem -Name "DisableLockWorkstation" -ErrorAction SilentlyContinue
+  Remove-ItemProperty -Path $policySystem -Name "HideFastUserSwitching"  -ErrorAction SilentlyContinue
+  Write-Warn "Ctrl+Alt+Del left working — pass -LockCtrlAltDel to remove it"
+}
 
 $policyExplorer = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"
 New-Item -Path $policyExplorer -Force | Out-Null
@@ -206,6 +223,62 @@ Register-ScheduledTask -TaskName "SEIKA Kiosk" `
   -Action $startAction -Trigger $startTrigger -Settings $startSettings -Principal $principal `
   -Description "Starts the SEIKA kiosk lock screen at logon." -Force | Out-Null
 
+# ─── 4b. Lockdown ────────────────────────────────────────────────────────────
+#
+# Everything below is a policy on the machine, and every one of them can be
+# undone by an administrator in two minutes. They are worth setting because
+# the player account is NOT an administrator — and if it is, none of this is
+# protecting anything. That is checked, loudly, at the end.
+
+if (-not $NoHarden) {
+  Write-Step "Closing the usual ways out"
+
+  # Run, cmd, PowerShell, the registry editor, Control Panel, Settings. These
+  # are the routes someone reaches for first, and none of them is needed to
+  # play a game.
+  Set-ItemProperty -Path $policyExplorer -Name "NoRun"               -Value 1 -Type DWord
+  Set-ItemProperty -Path $policyExplorer -Name "NoControlPanel"      -Value 1 -Type DWord
+  Set-ItemProperty -Path $policyExplorer -Name "NoFind"              -Value 1 -Type DWord
+  Set-ItemProperty -Path $policyExplorer -Name "NoViewContextMenu"   -Value 1 -Type DWord
+  Set-ItemProperty -Path $policyExplorer -Name "NoTrayContextMenu"   -Value 1 -Type DWord
+  Set-ItemProperty -Path $policyExplorer -Name "NoSetTaskbar"        -Value 1 -Type DWord
+  Set-ItemProperty -Path $policySystem   -Name "DisableCMD"          -Value 2 -Type DWord
+  Set-ItemProperty -Path $policySystem   -Name "DisableRegistryTools" -Value 1 -Type DWord
+  Write-Ok "Run, cmd, registry editor and Control Panel closed"
+
+  # Named programs refused outright. A blocklist, not a whitelist: a whitelist
+  # would also have to name every game and every launcher a zone installs, and
+  # the first one missed is a PC nobody can play on.
+  $disallow = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\DisallowRun"
+  New-Item -Path $disallow -Force | Out-Null
+  Set-ItemProperty -Path $policyExplorer -Name "DisallowRun" -Value 1 -Type DWord
+  $blocked = @(
+    "powershell.exe", "powershell_ise.exe", "pwsh.exe", "cmd.exe",
+    "regedit.exe", "regedt32.exe", "mmc.exe", "gpedit.msc",
+    "taskmgr.exe", "msconfig.exe", "control.exe", "cmstp.exe",
+    "wscript.exe", "cscript.exe", "mshta.exe",
+    "msiexec.exe",                       # no installers
+    "bitsadmin.exe", "certutil.exe",     # common download-anything tools
+    "ftp.exe", "curl.exe", "wget.exe"
+  )
+  for ($i = 0; $i -lt $blocked.Count; $i++) {
+    Set-ItemProperty -Path $disallow -Name ($i + 1) -Value $blocked[$i] -Type String
+  }
+  Write-Ok "$($blocked.Count) programs blocked by name"
+
+  # Nothing leaves on a USB stick, and nothing arrives on one either.
+  $storage = "HKLM:\SYSTEM\CurrentControlSet\Control\StorageDevicePolicies"
+  New-Item -Path $storage -Force | Out-Null
+  Set-ItemProperty -Path $storage -Name "WriteProtect" -Value 1 -Type DWord
+  Write-Ok "USB storage is read-only"
+
+  # No installing anything, for anyone who is not an administrator.
+  $installer = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer"
+  New-Item -Path $installer -Force | Out-Null
+  Set-ItemProperty -Path $installer -Name "DisableMSI" -Value 2 -Type DWord
+  Write-Ok "installers blocked for non-administrators"
+}
+
 # ─── 5. Watchdog ─────────────────────────────────────────────────────────────
 # Policies stop the easy kills; the watchdog covers the rest — a crash, a task
 # ended by an admin tool, a player who finds something clever. Without it, one
@@ -251,4 +324,48 @@ Write-Host "   * In BIOS: set a supervisor password and disable USB/network boot
 Write-Host "     Without that, a player with a USB stick walks around all of this." -ForegroundColor DarkGray
 Write-Host ""
 Write-Host "  To reverse everything: .\Uninstall-SeikaKiosk.ps1" -ForegroundColor White
+# ─── The thing that decides whether any of this matters ──────────────────────
+#
+# Every policy above lives in the registry, and an administrator can undo all
+# of them from the machine in about two minutes. They are only a lock if the
+# account the player uses is a standard user. If it is not, this script has
+# given you the appearance of a locked PC and nothing else, and it is worth
+# saying so plainly rather than letting a zone find out the expensive way.
+
+Write-Host ""
+$admins = @()
+try {
+  $admins = Get-LocalGroupMember -Group "Administrators" -ErrorAction Stop |
+            Where-Object { $_.ObjectClass -eq "User" } |
+            ForEach-Object { $_.Name }
+} catch {
+  Write-Warn "Could not read the Administrators group — check it by hand."
+}
+
+$me = "$env:COMPUTERNAME\$env:USERNAME"
+$playerLooksAdmin = $admins | Where-Object { $_ -notmatch "Administrator$" -and $_ -ne $me }
+
+if ($playerLooksAdmin) {
+  Write-Host "  ! These accounts are administrators:" -ForegroundColor Yellow
+  $playerLooksAdmin | ForEach-Object { Write-Host "      $_" -ForegroundColor Yellow }
+  Write-Host ""
+  Write-Host "  If a player signs in with one of those, everything this script" -ForegroundColor Yellow
+  Write-Host "  just set can be undone from the machine. Make the player account" -ForegroundColor Yellow
+  Write-Host "  a Standard user:" -ForegroundColor Yellow
+  Write-Host "      Remove-LocalGroupMember -Group Administrators -Member '<name>'" -ForegroundColor DarkGray
+} else {
+  Write-Ok "no extra administrator accounts found"
+}
+
+Write-Host ""
+Write-Host "  Not covered by any of this:" -ForegroundColor DarkGray
+Write-Host "    - booting from USB or into Safe Mode. Set a BIOS password and" -ForegroundColor DarkGray
+Write-Host "      disable USB boot; nothing in Windows can stop it." -ForegroundColor DarkGray
+Write-Host "    - a player deleting their own documents. Games need to write," -ForegroundColor DarkGray
+Write-Host "      so the profile cannot be made read-only." -ForegroundColor DarkGray
+if (-not $LockCtrlAltDel) {
+  Write-Host "    - Ctrl+Alt+Del, left working on purpose. Add -LockCtrlAltDel" -ForegroundColor DarkGray
+  Write-Host "      once you have tested the rest." -ForegroundColor DarkGray
+}
+
 Write-Host ""

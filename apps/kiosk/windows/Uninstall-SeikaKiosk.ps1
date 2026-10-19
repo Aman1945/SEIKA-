@@ -54,6 +54,23 @@ Try-Step "Restoring the Ctrl+Alt+Del screen" {
   }
 }
 
+Try-Step "Undoing the lockdown" {
+  # Everything 4b set. A kiosk that cannot be fully removed is worse than one
+  # that was never installed — the machine has to come back as it was.
+  foreach ($n in "NoControlPanel", "NoFind", "NoViewContextMenu",
+                 "NoTrayContextMenu", "NoSetTaskbar", "DisallowRun") {
+    Remove-ItemProperty -Path $policyExplorer -Name $n -ErrorAction SilentlyContinue
+  }
+  foreach ($n in "DisableCMD", "DisableRegistryTools") {
+    Remove-ItemProperty -Path $policySystem -Name $n -ErrorAction SilentlyContinue
+  }
+  Remove-Item -Path "$policyExplorer\DisallowRun" -Recurse -Force -ErrorAction SilentlyContinue
+  Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\StorageDevicePolicies" `
+    -Name "WriteProtect" -ErrorAction SilentlyContinue
+  Remove-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer" `
+    -Name "DisableMSI" -ErrorAction SilentlyContinue
+}
+
 Try-Step "Restoring the Windows keys (takes effect after a reboot)" {
   Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Keyboard Layout" `
     -Name "Scancode Map" -ErrorAction SilentlyContinue
