@@ -340,6 +340,7 @@
   .lx-main {
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
     gap: clamp(0.8rem, 2vh, 1.4rem);
     padding: 0 clamp(1rem, 2.5vw, 2.2rem) clamp(1rem, 2.5vh, 1.6rem);
     min-height: 0;
@@ -437,12 +438,30 @@
   }
   .lx-staff-open:hover { opacity: 1; }
   .lx-staff {
-    margin-top: 1.2rem;
-    padding: 1.2rem;
-    border-radius: 16px;
-    background: var(--glass-1);
-    border: 1px solid rgb(255 255 255 / 0.08);
-    max-width: 560px;
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    margin: auto;
+    width: min(560px, calc(100vw - 2rem));
+    height: fit-content;
+    max-height: calc(100vh - 3rem);
+    overflow-y: auto;
+    padding: 1.4rem;
+    border-radius: 18px;
+    background: #121426;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    box-shadow: 0 40px 120px -30px rgb(0 0 0 / 0.9);
+  }
+  .lx-staff[hidden] { display: none; }
+  .lx-staff__close {
+    float: right;
+    margin: -0.4rem -0.4rem 0 0;
+    width: 32px; height: 32px;
+    font: inherit; font-size: 1.1rem; line-height: 1;
+    color: inherit; cursor: pointer;
+    background: transparent;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    border-radius: 50%;
   }
   .lx-field { margin: 0.8rem 0; }
   .lx-field label {
@@ -521,6 +540,7 @@
       <button class="lx-staff-open" id="lxStaffOpen">Staff: manage games</button>
 
       <div class="lx-staff" id="lxStaff" hidden>
+        <button class="lx-staff__close" id="lxStaffClose" aria-label="Close">×</button>
         <h3 class="lx-heading">Staff sign-in</h3>
         <p class="lx-note">
           Adding a game tells this PC to run a program, so it needs a staff
@@ -746,6 +766,7 @@
   // collects a code and passes it along.
   let sfToken = null;
 
+  $("lxStaffClose").onclick = () => { $("lxStaff").hidden = true; };
   $("lxStaffOpen").onclick = () => {
     const panel = $("lxStaff");
     panel.hidden = !panel.hidden;
