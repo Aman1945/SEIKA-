@@ -46,6 +46,28 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setPlayerId(p.playerId);
   }, [api]);
 
+  /**
+   * Sign in from a handoff token on the URL.
+   *
+   * The launcher on the PC opens this app with a token the server issued for
+   * whoever is seated there, so the player is not asked to sign in a second
+   * time on a machine they already paid for. The token is stripped from the
+   * address bar immediately: it should not sit in history, and the launcher
+   * is not the only thing that can read a URL.
+   */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    const handoff = url.searchParams.get("handoff");
+    if (!handoff) return;
+
+    url.searchParams.delete("handoff");
+    window.history.replaceState({}, "", url.pathname + url.search);
+    // No refresh token: a handoff lasts the session, and a PC in a gaming
+    // zone is not somewhere a long-lived credential should be left behind.
+    client.setTokens({ accessToken: handoff, refreshToken: "", subjectType: "player" });
+  }, [client]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {

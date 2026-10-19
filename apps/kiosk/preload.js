@@ -28,6 +28,7 @@ contextBridge.exposeInMainWorld("seika", {
   onFatal: on("seika:fatal"),
   onEscapePrompt: on("seika:escape-prompt"),
   onLauncher: on("seika:launcher"),
+  onDashboard: on("seika:dashboard"),
 
   // Requests the renderer may make.
   getConfig: () => ipcRenderer.invoke("seika:config"),
@@ -56,4 +57,8 @@ contextBridge.exposeInMainWorld("seika", {
    * anything not listed, so the renderer can never name an executable.
    */
   launchGame: (name) => ipcRenderer.invoke("seika:launch-game", { name }),
+
+  /** Staff-only; main verifies the token with the server before writing. */
+  saveGame: (payload) => ipcRenderer.invoke("seika:save-game", payload),
+  listGamePaths: () => ipcRenderer.invoke("seika:list-games"),
 });

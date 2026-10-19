@@ -190,8 +190,14 @@
     * { animation: none !important; transition: none !important; }
   }
 
+  /* contents, so its children lay out as if this wrapper were not here —
+     but as a rule, not an inline style, or the hide below cannot win. */
+  .locked-view { display: contents; }
   body[data-locked="false"] .locked-view { display: none; }
-  body[data-locked="false"] .unlocked { display: block; }
+  /* The pill is lock-screen reporting: connection, heartbeat, how old the
+     code is. None of that applies once the player is in, and it was landing
+     on top of the dashboard's own navigation. */
+  body[data-locked="false"] .status { display: none; }
 
   /* ─── Recovery ──────────────────────────────────────────────────────────
      Shown only when this PC has no usable config. Deliberately plain and
@@ -290,6 +296,7 @@
 
   .lx-main { padding: 0 2.2rem 2.2rem; }
   .lx-heading {
+    margin: 0 0 0.6rem;
     font-size: 0.78rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
@@ -324,12 +331,160 @@
     font-size: 0.78rem;
     opacity: 0.6;
   }
-  .lx-note { margin-top: 1.2rem; font-size: 0.85rem; opacity: 0.7; min-height: 1.2em; }
+  .lx-note { margin: 0.7rem 0 0; font-size: 0.85rem; opacity: 0.7; }
+  .lx-note:empty { display: none; }
+
+  /* ─── Launcher layout ───────────────────────────────────────────────────
+     Two columns on a desktop, stacked on anything narrow. The dashboard is
+     the same player app the phone shows, so there is one of it, not two. */
+  .lx-main {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(0.8rem, 2vh, 1.4rem);
+    padding: 0 clamp(1rem, 2.5vw, 2.2rem) clamp(1rem, 2.5vh, 1.6rem);
+    min-height: 0;
+  }
+  /* The games strip is as tall as its tiles; everything left goes to the
+     dashboard. Without this the strip grew and pushed the dashboard off the
+     bottom of the screen. */
+  .lx-col { min-width: 0; flex: 0 0 auto; }
+  .lx-col--dash { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .lx-col--dash .lx-dash { flex: 1; }
+  .lx-dash {
+    /* Whatever is left after the header and the games strip. The player app
+       is responsive now, so giving it the width is what makes it stop
+       looking like a phone. */
+    flex: 1;
+    min-height: clamp(380px, 56vh, 900px);
+    border-radius: 18px;
+    overflow: hidden;
+    background: var(--glass-1);
+    border: 1px solid rgb(255 255 255 / 0.08);
+    box-shadow: var(--lift);
+    position: relative;
+  }
+  /* Absolute rather than height:100%. A <webview> is replaced content, so a
+     percentage height falls back to its intrinsic 150px and the guest page
+     lays out in a 150px-tall viewport inside a 610px panel — the nav lands a
+     third of the way down and the rest is blank. Pinning all four edges gives
+     it a definite size. */
+  .lx-dash webview, .lx-dash iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: flex;
+  }
+  .lx-dash__msg {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 1.4rem;
+    text-align: center;
+    font-size: 0.9rem;
+    opacity: 0.7;
+  }
+
+  /* Stack once two columns stop being readable, and on a short screen give
+     the dashboard less height so the games stay reachable without scrolling
+     past them. */
+  /* The games strip scrolls sideways rather than growing a second row and
+     pushing the dashboard off a short screen. */
+  .lx-games {
+    display: flex;
+    gap: 0.8rem;
+    overflow-x: auto;
+    padding-bottom: 0.3rem;
+    scrollbar-width: thin;
+  }
+  .lx-game { flex: 0 0 auto; min-width: 170px; padding: 0.9rem 1.1rem; }
+  @media (max-height: 760px) {
+    .lx-dash { min-height: 46vh; }
+    .lx-game { padding: 0.7rem 1rem; min-width: 150px; }
+  }
+  .unlocked {
+    display: none;
+    width: 100%;
+    height: 100dvh;
+    flex-direction: column;
+  }
+  body[data-locked="false"] .unlocked { display: flex; }
+  /* The launcher owns the viewport; only the dashboard inside it scrolls. */
+  body[data-locked="false"] {
+    justify-content: flex-start;
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
+  }
+  .lx-top { padding: clamp(0.8rem, 2vh, 1.4rem) clamp(1rem, 2.5vw, 2.2rem); }
+
+  /* ─── Staff panel ───────────────────────────────────────────────────────
+     Only a way to add games. It is in the launcher because that is where
+     staff are standing when they notice a game is missing. */
+  .lx-staff-open {
+    margin-top: 0.8rem;
+    padding: 0.55rem 1rem;
+    font: inherit;
+    font-size: 0.82rem;
+    color: inherit;
+    opacity: 0.65;
+    background: transparent;
+    border: 1px solid rgb(255 255 255 / 0.14);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .lx-staff-open:hover { opacity: 1; }
+  .lx-staff {
+    margin-top: 1.2rem;
+    padding: 1.2rem;
+    border-radius: 16px;
+    background: var(--glass-1);
+    border: 1px solid rgb(255 255 255 / 0.08);
+    max-width: 560px;
+  }
+  .lx-field { margin: 0.8rem 0; }
+  .lx-field label {
+    display: block;
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    opacity: 0.55;
+    margin-bottom: 0.35rem;
+  }
+  .lx-field input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.6rem 0.8rem;
+    font: inherit;
+    color: inherit;
+    background: rgb(0 0 0 / 0.3);
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 10px;
+  }
+  .lx-row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-top: 0.6rem; }
+  .lx-btn {
+    padding: 0.55rem 1.1rem;
+    font: inherit;
+    font-size: 0.9rem;
+    color: inherit;
+    background: rgb(255 255 255 / 0.08);
+    border: 1px solid rgb(255 255 255 / 0.14);
+    border-radius: 999px;
+    cursor: pointer;
+  }
+  .lx-btn--primary { background: linear-gradient(180deg, #7fe3c4, #4cc3a4); color: #06111a; border: 0; font-weight: 600; }
+  .lx-btn:disabled { opacity: 0.5; cursor: default; }
+  .lx-sflist { display: grid; gap: 0.4rem; margin-bottom: 0.8rem; }
+  .lx-sfrow { display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; }
+  .lx-sfrow code { opacity: 0.6; font-size: 0.78rem; word-break: break-all; }
+  .lx-sfrow button { margin-left: auto; }
 </style>
 
 <div class="banner" id="banner"></div>
 
-<div class="locked-view" style="display: contents">
+<div class="locked-view">
   <div class="brand">SEIKA</div>
   <div class="pc" id="pcLabel">—</div>
 
@@ -359,9 +514,53 @@
   </header>
 
   <main class="lx-main">
-    <h2 class="lx-heading">Your games</h2>
-    <div class="lx-games" id="lxGames"></div>
-    <p class="lx-note" id="lxNote"></p>
+    <section class="lx-col">
+      <h2 class="lx-heading">Your games</h2>
+      <div class="lx-games" id="lxGames"></div>
+      <p class="lx-note" id="lxNote"></p>
+      <button class="lx-staff-open" id="lxStaffOpen">Staff: manage games</button>
+
+      <div class="lx-staff" id="lxStaff" hidden>
+        <h3 class="lx-heading">Staff sign-in</h3>
+        <p class="lx-note">
+          Adding a game tells this PC to run a program, so it needs a staff
+          account. Sign in, make your changes, then sign out.
+        </p>
+        <div class="lx-field">
+          <label for="sfId">Staff phone or email</label>
+          <input id="sfId" autocomplete="off" placeholder="9700000001" />
+        </div>
+        <div class="lx-row">
+          <button class="lx-btn" id="sfSend">Send code</button>
+          <span class="lx-note" id="sfMsg"></span>
+        </div>
+        <div class="lx-field" id="sfCodeWrap" hidden>
+          <label for="sfCode">Code</label>
+          <input id="sfCode" inputmode="numeric" autocomplete="one-time-code" placeholder="000000" />
+        </div>
+        <div class="lx-row" id="sfVerifyWrap" hidden>
+          <button class="lx-btn lx-btn--primary" id="sfVerify">Sign in</button>
+        </div>
+
+        <div id="sfPanel" hidden>
+          <h3 class="lx-heading">Games on this PC</h3>
+          <div id="sfList" class="lx-sflist"></div>
+          <div class="lx-field"><label for="sfName">Name</label><input id="sfName" placeholder="Valorant" /></div>
+          <div class="lx-field"><label for="sfPath">Path to the .exe</label><input id="sfPath" placeholder="C:/Riot Games/..." /></div>
+          <div class="lx-row">
+            <button class="lx-btn lx-btn--primary" id="sfAdd">Add game</button>
+            <button class="lx-btn" id="sfOut">Sign out</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="lx-col lx-col--dash">
+      <h2 class="lx-heading">Your passport</h2>
+      <div class="lx-dash" id="lxDash">
+        <div class="lx-dash__msg" id="lxDashMsg">Loading your profile…</div>
+      </div>
+    </section>
   </main>
 
   <p class="lx-note">This screen returns when your session ends.</p>
@@ -518,7 +717,11 @@
       value.textContent = `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
       label.textContent = left === 0 ? "time is up" : "time left";
       box.classList.toggle("lx-clock--low", left > 0 && left < 5 * 60 * 1000);
-    } else if (lxOpenSince) {
+    } else if (!lxOpenSince) {
+      value.textContent = "—";
+      label.textContent = "no timed session";
+      box.classList.remove("lx-clock--low");
+    } else {
       const up = Date.now() - lxOpenSince;
       const m = Math.floor(up / 60000);
       value.textContent = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
@@ -527,6 +730,148 @@
     }
   }
   setInterval(tickClock, 1000);
+
+  /**
+   * The player's own dashboard, embedded.
+   *
+   * A <webview> rather than an iframe: it is a separate process with no
+   * preload and no node access, so the remote page cannot reach the lock, the
+   * config or the game launcher even if it wanted to. It is also the same app
+   * the phone shows, so there is one player UI to maintain rather than two.
+   */
+  // ─── Staff: manage the games on this PC ───────────────────────────────
+  //
+  // The sign-in happens against the zone server, and main re-checks the token
+  // before it writes anything. Nothing here is trusted: this panel only
+  // collects a code and passes it along.
+  let sfToken = null;
+
+  $("lxStaffOpen").onclick = () => {
+    const panel = $("lxStaff");
+    panel.hidden = !panel.hidden;
+    if (!panel.hidden) void refreshStaffList();
+  };
+
+  async function apiCall(path, body, token) {
+    const base = (await seika.getConfig()).apiUrl;
+    const res = await fetch(base + path, {
+      method: "POST",
+      headers: { "content-type": "application/json", ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  $("sfSend").onclick = async () => {
+    const id = $("sfId").value.trim();
+    if (!id) return;
+    $("sfMsg").textContent = "Sending…";
+    try {
+      const r = await apiCall("/api/auth/otp/request", { identifier: id, audience: "staff" });
+      if (r.error) { $("sfMsg").textContent = r.error.message; return; }
+      $("sfCodeWrap").hidden = false;
+      $("sfVerifyWrap").hidden = false;
+      if (r.devCode) $("sfCode").value = r.devCode;
+      $("sfMsg").textContent = r.devCode ? `Development code: ${r.devCode}` : "Code sent";
+    } catch (e) {
+      $("sfMsg").textContent = "Could not reach the zone server";
+    }
+  };
+
+  $("sfVerify").onclick = async () => {
+    const id = $("sfId").value.trim();
+    const code = $("sfCode").value.trim();
+    const r = await apiCall("/api/auth/otp/verify", { identifier: id, code, audience: "staff" });
+    if (!r.accessToken) { $("sfMsg").textContent = r.error?.message ?? "That did not work"; return; }
+    sfToken = r.accessToken;
+    $("sfMsg").textContent = "Signed in";
+    $("sfPanel").hidden = false;
+    void refreshStaffList();
+  };
+
+  $("sfOut").onclick = () => {
+    // Cleared here and nowhere else: a staff token must not outlive the
+    // person standing at the PC.
+    sfToken = null;
+    $("sfPanel").hidden = true;
+    $("sfCodeWrap").hidden = true;
+    $("sfVerifyWrap").hidden = true;
+    $("sfId").value = "";
+    $("sfCode").value = "";
+    $("sfMsg").textContent = "Signed out";
+  };
+
+  async function refreshStaffList() {
+    const res = await seika.listGamePaths();
+    const list = $("sfList");
+    list.replaceChildren();
+    const entries = Object.entries(res?.games ?? {});
+    if (!entries.length) {
+      const p = document.createElement("p");
+      p.className = "lx-note";
+      p.textContent = "No games on this PC yet.";
+      list.appendChild(p);
+      return;
+    }
+    for (const [name, p] of entries) {
+      const row = document.createElement("div");
+      row.className = "lx-sfrow";
+      const n = document.createElement("strong"); n.textContent = name;
+      const c = document.createElement("code"); c.textContent = p;
+      row.append(n, c);
+      if (sfToken) {
+        const rm = document.createElement("button");
+        rm.className = "lx-btn";
+        rm.textContent = "Remove";
+        rm.onclick = async () => {
+          const r = await seika.saveGame({ staffToken: sfToken, name, remove: true });
+          $("sfMsg").textContent = r.ok ? `Removed ${name}` : r.reason;
+          if (r.ok) void refreshStaffList();
+        };
+        row.appendChild(rm);
+      }
+      list.appendChild(row);
+    }
+  }
+
+  $("sfAdd").onclick = async () => {
+    const r = await seika.saveGame({
+      staffToken: sfToken,
+      name: $("sfName").value,
+      exePath: $("sfPath").value,
+    });
+    $("sfMsg").textContent = r.ok ? "Added" : r.reason;
+    if (r.ok) { $("sfName").value = ""; $("sfPath").value = ""; void refreshStaffList(); }
+  };
+
+  seika.onDashboard(({ url, error }) => {
+    const holder = $("lxDash");
+    const msg = $("lxDashMsg");
+
+    if (error) {
+      holder.replaceChildren(msg);
+      msg.textContent = error;
+      return;
+    }
+    if (!url) {
+      holder.replaceChildren(msg);
+      msg.textContent = "Loading your profile…";
+      return;
+    }
+
+    const view = document.createElement("webview");
+    view.setAttribute("src", url);
+    // No preload, no node, its own partition: nothing of this page is shared.
+    view.setAttribute("partition", "persist:seika-player");
+    view.addEventListener("did-fail-load", (e) => {
+      // Not a hard failure for the player — their games still work, and a
+      // blank panel with no explanation is worse than a sentence.
+      if (e.errorCode === -3) return; // aborted, usually a redirect
+      holder.replaceChildren(msg);
+      msg.textContent = "Could not reach the zone server for your profile.";
+    });
+    holder.replaceChildren(view);
+  });
 
   seika.onState(({ locked, reason }) => {
     document.body.dataset.locked = String(locked);

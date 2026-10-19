@@ -65,6 +65,19 @@ class KioskApi {
     return this.request(`/api/pcs/${this.pcId}/qr`, { method: "POST", token: staffToken });
   }
 
+  /** A token for the player seated at this PC, for the launcher's dashboard. */
+  sessionHandoff(clientKey) {
+    return this.request(`/api/pcs/${this.pcId}/session-handoff`, {
+      method: "POST",
+      body: { clientKey },
+    });
+  }
+
+  /** Who does this token belong to? Used to gate staff-only actions. */
+  whoAmI(token) {
+    return this.request("/api/auth/me", { token });
+  }
+
   health() {
     return this.request("/health");
   }

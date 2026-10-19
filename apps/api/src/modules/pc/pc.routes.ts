@@ -8,6 +8,7 @@ import { requireRole } from "../../middleware/rbac.js";
 import { PC } from "../../models/PC.js";
 import { Session } from "../../models/Session.js";
 import { issuePairingCode } from "../../common/pairingCode.js";
+import { issueTokens } from "../auth/auth.service.js";
 import { signQrToken } from "../../common/qr.js";
 import { emitToZone, emitToPc } from "../realtime/io.js";
 import { audit } from "../audit/audit.service.js";
@@ -77,6 +78,58 @@ pcRouter.post(
     // at different moments, and so one refresh retires both.
     const pair = await issuePairingCode(String(pc._id), String(pc.zoneId));
     res.json({ ok: true, pcId: String(pc._id), ...qr, pairCode: pair.code });
+  })
+);
+
+/**
+ * Hands the seated player's own session to the PC they are sitting at.
+ *
+ * The player signed in on their phone; the launcher on the PC should not ask
+ * them to do it again. So the machine asks for a token — proving it is that
+ * PC with its clientKey — and the server issues one only for the player who
+ * is actually seated there, and only while the session is live.
+ *
+ * Nothing here is taken from the request: not the player, not the session.
+ * The PC says who it is, and the server decides the rest.
+ */
+pcRouter.post(
+  "/:id/session-handoff",
+  asyncHandler(async (req, res) => {
+    const { clientKey } = z.object({ clientKey: z.string() }).parse(req.body);
+    const pc = await PC.findById(req.params.id);
+    if (!pc) throw notFound("PC not found");
+    if (pc.clientKey !== clientKey) throw forbidden("Invalid clientKey");
+
+    const session = await Session.findOne({
+      pcId: pc._id,
+      status: { $in: ["ACTIVE", "PAUSED", "LOW_BALANCE"] },
+    }).sort({ createdAt: -1 });
+
+    // No live session means no one is seated, so there is nobody to hand over.
+    if (!session) throw forbidden("No live session on this PC");
+
+    const tokens = await issueTokens({
+      subjectId: String(session.playerId),
+      subjectType: "player",
+      zoneId: String(session.zoneId),
+    });
+
+    // The clock is answered here rather than from the unlock message, so it
+    // is right however the PC came to be unlocked — a session start, a staff
+    // command, or a kiosk that restarted mid-session and missed the event.
+    const endsAt =
+      session.sessionMode === "FIXED_DURATION" && session.selectedMinutes && session.startTime
+        ? new Date(session.startTime.getTime() + session.selectedMinutes * 60_000)
+        : null;
+
+    res.json({
+      ok: true,
+      accessToken: tokens.accessToken,
+      sessionId: String(session._id),
+      startedAt: session.startTime ?? null,
+      endsAt,
+      sessionMode: session.sessionMode,
+    });
   })
 );
 

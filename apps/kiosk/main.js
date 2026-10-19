@@ -155,6 +155,10 @@ function createWindow() {
       nodeIntegration: false,
       // The lock screen loads only local files; it has no reason to navigate.
       sandbox: true,
+      // The launcher embeds the player app in a <webview>, which is isolated
+      // from this page: it gets no preload and no node, so the remote page
+      // cannot reach the lock, the config or the game launcher.
+      webviewTag: true,
     },
   });
 
@@ -254,6 +258,122 @@ function stopAssertingLock() {
   assertTimer = null;
 }
 
+/** Where staff-added game paths are kept, separate from the installer's config. */
+function gamesFile() {
+  const dir =
+    process.platform === "win32"
+      ? path.join(process.env.ProgramData || "C:\\ProgramData", "SEIKA")
+      : path.dirname(config?.__source ?? __dirname);
+  return path.join(dir, "games.json");
+}
+
+/** config.js paths first, then anything staff added on this machine. */
+function allGamePaths() {
+  const fromConfig = config?.gamePaths ?? {};
+  let added = {};
+  try {
+    const f = gamesFile();
+    if (fs.existsSync(f)) added = JSON.parse(fs.readFileSync(f, "utf8"));
+  } catch (err) {
+    logger(`games.json unreadable: ${err.message}`);
+  }
+  return { ...fromConfig, ...added };
+}
+
+/**
+ * Adds or removes a game, once the server has confirmed the caller is staff.
+ *
+ * The gate is the server, not this process: the kiosk asks the API whether
+ * the supplied token belongs to staff of THIS zone. A player who reaches the
+ * launcher cannot add a path, which matters because a path is an arbitrary
+ * executable this machine will run.
+ */
+async function saveGame({ staffToken, name, exePath, remove }) {
+  if (!api || !config) return { ok: false, reason: "This PC is not configured" };
+
+  let who;
+  try {
+    who = await api.whoAmI(staffToken);
+  } catch {
+    return { ok: false, reason: "That sign-in did not work" };
+  }
+  if (who?.auth?.typ !== "staff") return { ok: false, reason: "Staff only" };
+  if (String(who.auth.zoneId ?? "") !== String(config.zoneId ?? who.auth.zoneId)) {
+    // Falls back to accepting the token's own zone when the PC was configured
+    // without one; a mismatch when we do know is refused.
+    if (config.zoneId) return { ok: false, reason: "That account is for another zone" };
+  }
+
+  const clean = String(name ?? "").trim();
+  if (!clean) return { ok: false, reason: "Give the game a name" };
+
+  const current = (() => {
+    try {
+      const f = gamesFile();
+      return fs.existsSync(f) ? JSON.parse(fs.readFileSync(f, "utf8")) : {};
+    } catch {
+      return {};
+    }
+  })();
+
+  if (remove) {
+    delete current[clean];
+  } else {
+    const p = String(exePath ?? "").trim().replace(/^"|"$/g, "");
+    if (!p) return { ok: false, reason: "Give the path to the game" };
+    // Checked now rather than at launch, so the mistake is caught by the
+    // person who can fix it instead of the player who cannot.
+    if (!fs.existsSync(p)) return { ok: false, reason: `Nothing at ${p}` };
+    current[clean] = p;
+  }
+
+  try {
+    const f = gamesFile();
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    fs.writeFileSync(f, JSON.stringify(current, null, 2));
+  } catch (err) {
+    return { ok: false, reason: `Could not save: ${err.message}` };
+  }
+
+  logger(`${remove ? "removed" : "added"} game ${clean} by staff ${who.auth.sub}`);
+  const games = Object.keys(allGamePaths());
+  if (lastSession) lastSession.games = games;
+  send("seika:launcher", { ...(lastSession ?? {}), games });
+  return { ok: true, games };
+}
+
+/**
+ * Asks the server for a token for the player sitting here.
+ *
+ * They signed in on their phone to pay; asking again on the PC they just paid
+ * for would be absurd. The machine proves itself with its clientKey and the
+ * server decides who, if anyone, is seated — nothing about the player is
+ * taken from this side.
+ */
+async function handoffForSeatedPlayer() {
+  if (!api || !config) return;
+  try {
+    const res = await api.sessionHandoff(config.clientKey);
+    const base = String(config.playerUrl ?? "").replace(/\/$/, "");
+    if (!base) {
+      send("seika:dashboard", { error: "No playerUrl is set on this PC" });
+      return;
+    }
+    send("seika:dashboard", { url: `${base}/?handoff=${encodeURIComponent(res.accessToken)}` });
+    // Authoritative timing, replacing whatever the unlock message carried.
+    send("seika:launcher", {
+      ...(lastSession ?? {}),
+      startedAt: res.startedAt ?? null,
+      endsAt: res.endsAt ?? null,
+      sessionMode: res.sessionMode ?? "OPEN_HOUR",
+      games: Object.keys(allGamePaths()),
+    });
+  } catch (err) {
+    logger(`handoff failed: ${err.message}`);
+    send("seika:dashboard", { error: "Could not load your profile" });
+  }
+}
+
 /**
  * Starts a game the zone has configured on this machine.
  *
@@ -264,7 +384,7 @@ function stopAssertingLock() {
  * not a game this PC offers.
  */
 function launchGame(name) {
-  const paths = config?.gamePaths ?? {};
+  const paths = allGamePaths();
   const target = Object.prototype.hasOwnProperty.call(paths, name) ? paths[name] : null;
   if (!target) return { ok: false, reason: "That game is not set up on this PC" };
 
@@ -472,11 +592,17 @@ function connectRealtime() {
         startedAt: payload?.startedAt ?? null,
         endsAt: payload?.endsAt ?? null,
         sessionMode: payload?.sessionMode ?? "OPEN_HOUR",
-        games: Array.isArray(config?.games) ? config.games : Object.keys(config?.gamePaths ?? {}),
+        games: Object.keys(allGamePaths()),
       };
       send("seika:launcher", lastSession);
+      // Fetched after the UI is told to draw, so the launcher appears at once
+      // and the dashboard fills in rather than holding everything up.
+      void handoffForSeatedPlayer();
     }
-    if (action === "lock" || action === "maintenance") lastSession = null;
+    if (action === "lock" || action === "maintenance") {
+      lastSession = null;
+      send("seika:dashboard", { url: null });
+    }
     switch (action) {
       case "unlock":
         applyLock(false, "Session authorized");
@@ -788,6 +914,8 @@ function registerIpc() {
   ipcMain.handle("seika:staff-escape", (_e, { code }) => attemptStaffEscape(code));
   ipcMain.handle("seika:emergency-exit", () => emergencyExit("button"));
   // Refused while locked: a PC that has not been paid for does not run games.
+  ipcMain.handle("seika:save-game", (_e, payload) => saveGame(payload ?? {}));
+  ipcMain.handle("seika:list-games", () => ({ ok: true, games: allGamePaths() }));
   ipcMain.handle("seika:launch-game", (_e, { name }) =>
     locked ? { ok: false, reason: "The PC is locked" } : launchGame(String(name ?? ""))
   );
