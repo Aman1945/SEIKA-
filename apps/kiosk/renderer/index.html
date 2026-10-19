@@ -42,7 +42,13 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 28px;
+    /* The pairing code made this column taller than a laptop screen, and with
+       overflow hidden the bottom simply vanished while the fixed status pill
+       sat on top of the code. Give the pill its own room and let the gap
+       close up when there is not much height to spend. */
+    gap: clamp(12px, 2.4vh, 28px);
+    padding: 20px 20px calc(24px + 52px);
+    box-sizing: border-box;
     /* Nothing on this screen is meant to be selected or dragged away. */
     user-select: none;
     -webkit-user-select: none;
@@ -76,9 +82,9 @@
     position: relative;
     background: #fff;
     border-radius: 26px;
-    padding: 20px;
-    width: 332px;
-    height: 332px;
+    width: min(332px, 38vh, 72vw);
+    height: min(332px, 38vh, 72vw);
+    padding: clamp(10px, 1.6vh, 20px);
     display: grid;
     place-items: center;
     box-shadow:
@@ -227,7 +233,7 @@
      The way in for a player who cannot scan: cracked camera, no permission,
      or a screen too dirty to read optically. */
   .paircode {
-    margin-top: 1.1rem;
+    margin-top: 0;
     text-align: center;
   }
   .paircode__label {
@@ -239,8 +245,8 @@
   .paircode__digits {
     margin-top: 0.35rem;
     font-family: var(--font-display, inherit);
-    font-size: clamp(1.6rem, 3.4vw, 2.4rem);
-    letter-spacing: 0.14em;
+    font-size: clamp(1.4rem, 3.6vh, 2.4rem);
+    letter-spacing: 0.12em;
     font-variant-numeric: tabular-nums;
     color: #eaf2ff;
     text-shadow: 0 0 24px rgb(var(--glow-1) / 0.45);
@@ -358,8 +364,7 @@
     <p class="lx-note" id="lxNote"></p>
   </main>
 
-  <div class="lx-brand-hidden" hidden>
-  <div class="sub">This screen will return when your session ends.</div>
+  <p class="lx-note">This screen returns when your session ends.</p>
 </div>
 
 <!-- Staff escape. Hidden until the key combination is pressed, so a player
