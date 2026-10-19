@@ -21,7 +21,24 @@ export async function startSession(sessionId: string) {
 
   await PC.findByIdAndUpdate(session.pcId, { status: "OCCUPIED" });
 
-  emitToPc(String(session.pcId), "command", { action: "unlock", sessionId });
+  // The launcher on the PC needs enough to render itself without a second
+  // round trip: how long the player has, and whether it is counting down to a
+  // fixed end or running open-ended. It computes the clock from endsAt rather
+  // than being told the remaining seconds, so a slow message does not make
+  // the timer wrong.
+  const endsAt =
+    session.sessionMode === "FIXED_DURATION" && session.selectedMinutes
+      ? new Date(session.startTime.getTime() + session.selectedMinutes * 60_000)
+      : null;
+
+  emitToPc(String(session.pcId), "command", {
+    action: "unlock",
+    sessionId,
+    startedAt: session.startTime,
+    endsAt,
+    sessionMode: session.sessionMode,
+    selectedMinutes: session.selectedMinutes ?? null,
+  });
   emitToZone(String(session.zoneId), "session:update", {
     sessionId,
     pcId: String(session.pcId),

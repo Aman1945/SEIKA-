@@ -44,6 +44,20 @@ window.SEIKA_CONFIG = {
   // Or, for a quick setup, the code itself:
   // staffEscapeCode: "1234",
 
+  // ─── Games the launcher offers ───────────────────────────────────────────
+  // Name → the executable on THIS machine. The launcher shows one tile per
+  // entry, and main.js will only ever start something listed here: the lock
+  // screen sends a name, never a path, so it cannot be talked into running
+  // an arbitrary program.
+  //
+  // Names should match what the zone console lists for this PC, so staff and
+  // players are talking about the same thing.
+  gamePaths: {
+    // Valorant: "C:/Riot Games/Riot Client/RiotClientServices.exe",
+    // CS2: "C:/Program Files (x86)/Steam/steam.exe",
+    // "GTA V": "C:/Program Files/Rockstar Games/GTAV/PlayGTAV.exe",
+  },
+
   // Where each game keeps its settings on THIS machine. Only games listed here
   // are considered for Smart Sync, and even then the server decides which
   // folders inside them may actually sync.

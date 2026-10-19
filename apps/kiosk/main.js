@@ -11,6 +11,7 @@
 const { app, BrowserWindow, globalShortcut, ipcMain, powerSaveBlocker } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
+const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
 
 const { io } = require("socket.io-client");
@@ -59,6 +60,8 @@ let locked = true;
 let lastConnected = false;
 let lastHeartbeatOk = false;
 let lastQr = null;
+/** What the launcher needs to draw itself; set when the server unlocks us. */
+let lastSession = null;
 
 let recoveryMode = false;
 let recoveryReason = "";
@@ -162,6 +165,7 @@ function createWindow() {
     send("seika:connection", { connected: lastConnected });
     send("seika:heartbeat", { ok: lastHeartbeatOk });
     if (lastQr) send("seika:qr", lastQr);
+    if (lastSession) send("seika:launcher", lastSession);
     if (recoveryMode) send("seika:fatal", { message: recoveryReason });
     // The QR expires in about a minute, so a stale one is worth refreshing
     // rather than showing a code that will fail when scanned.
@@ -251,6 +255,92 @@ function stopAssertingLock() {
 }
 
 /**
+ * Starts a game the zone has configured on this machine.
+ *
+ * The renderer sends a NAME, never a path. Paths come only from config.js,
+ * which is written by the installer and read-only to the player account — so
+ * the lock screen cannot be talked into running an arbitrary executable even
+ * if someone reaches its devtools. A name with no entry in config is simply
+ * not a game this PC offers.
+ */
+function launchGame(name) {
+  const paths = config?.gamePaths ?? {};
+  const target = Object.prototype.hasOwnProperty.call(paths, name) ? paths[name] : null;
+  if (!target) return { ok: false, reason: "That game is not set up on this PC" };
+
+  if (!fs.existsSync(target)) {
+    logger(`game missing on disk: ${name} -> ${target}`);
+    return { ok: false, reason: "That game is not installed on this PC any more" };
+  }
+
+  // macOS will not start an .app by running the binary inside it — that exits
+  // immediately. Windows, which is where this ships, wants the exe directly.
+  const isMacBundle = process.platform === "darwin" && target.includes(".app/");
+  const cmd = isMacBundle ? "open" : target;
+  const args = isMacBundle ? ["-a", target.split(".app/")[0] + ".app"] : [];
+
+  return new Promise((resolve) => {
+    let child;
+    try {
+      // Detached and unref'd: the game must outlive the kiosk, not die with
+      // it, and must not hold the kiosk open when it exits.
+      child = spawn(cmd, args, {
+        detached: true,
+        stdio: "ignore",
+        cwd: path.dirname(target),
+      });
+    } catch (err) {
+      logger(`launch failed ${name}: ${err.message}`);
+      resolve({ ok: false, reason: "Could not start that game" });
+      return;
+    }
+
+    // spawn resolving is not the game running. A bad path, a missing DLL or a
+    // launcher that refuses will exit within a moment, and the player would
+    // otherwise be looking at "Running" next to nothing happening.
+    let settled = false;
+    const ok = () => {
+      if (settled) return;
+      settled = true;
+      child.unref();
+      logger(`launched ${name}`);
+      resolve({ ok: true });
+    };
+
+    child.once("error", (err) => {
+      if (settled) return;
+      settled = true;
+      logger(`launch failed ${name}: ${err.message}`);
+      resolve({ ok: false, reason: "Could not start that game" });
+    });
+
+    child.once("exit", (code) => {
+      if (settled) return;
+      settled = true;
+
+      // `open` is a hand-off, not the app: it tells LaunchServices to start
+      // the bundle and exits 0 straight away. Treating that as a crash marked
+      // every successfully launched Mac app as failed.
+      if (isMacBundle && code === 0) {
+        child.unref();
+        logger(`launched ${name}`);
+        resolve({ ok: true });
+        return;
+      }
+
+      logger(`${name} exited immediately with code ${code}`);
+      resolve({
+        ok: false,
+        reason: "That game closed as soon as it started. Tell staff.",
+      });
+    });
+
+    // Survived long enough to be real.
+    setTimeout(ok, 2000);
+  });
+}
+
+/**
  * Gets the lock screen out of the way, leaving the player their desktop.
  *
  * On macOS a kiosk window lives in its own Space, and leaving full screen is
@@ -271,23 +361,30 @@ function revealDesktop() {
     );
   state("before");
 
+  // The launcher stays on screen after the lock lifts — it is where the player
+  // starts a game, watches their time and orders from their seat. It must not
+  // behave like the lock, though: they need to reach the game they just
+  // started, so it gives up focus, can be minimised, and is not on top.
+  const toLauncher = () => {
+    if (locked || !win || win.isDestroyed()) return;
+    win.setMinimizable(true);
+    win.setClosable(true);
+    win.setSkipTaskbar(false);
+    win.show();
+    state("after");
+  };
+
   if (process.platform === "darwin" && (win.isKiosk() || win.isFullScreen())) {
-    // The event and the fallback timer both fire in the normal case; the
-    // window only needs hiding once.
+    // On macOS a kiosk window lives in its own Space and leaving full screen
+    // is animated and asynchronous. Acting partway through strands the machine
+    // in an empty Space — a blank screen with no way back.
     let settled = false;
     const done = () => {
       if (settled) return;
       settled = true;
-      // Re-checked: a session can start again while the animation runs, and
-      // hiding then would unlock a PC that is supposed to be locked.
-      if (!locked && win && !win.isDestroyed()) {
-        win.hide();
-        state("after");
-      }
+      toLauncher();
     };
     win.once("leave-full-screen", done);
-    // A transition that never reports back must not strand the window on
-    // screen for ever.
     setTimeout(done, 1500);
     win.setKiosk(false);
     win.setFullScreen(false);
@@ -295,8 +392,8 @@ function revealDesktop() {
   }
 
   win.setKiosk(false);
-  win.hide();
-  state("after");
+  win.setFullScreen(false);
+  toLauncher();
 }
 
 /**
@@ -365,6 +462,17 @@ function connectRealtime() {
   /** The only message that may unlock this machine. */
   socket.on("command", (payload) => {
     const action = payload?.action;
+    if (action === "unlock") {
+      lastSession = {
+        sessionId: payload?.sessionId ?? null,
+        startedAt: payload?.startedAt ?? null,
+        endsAt: payload?.endsAt ?? null,
+        sessionMode: payload?.sessionMode ?? "OPEN_HOUR",
+        games: Array.isArray(config?.games) ? config.games : Object.keys(config?.gamePaths ?? {}),
+      };
+      send("seika:launcher", lastSession);
+    }
+    if (action === "lock" || action === "maintenance") lastSession = null;
     switch (action) {
       case "unlock":
         applyLock(false, "Session authorized");
@@ -675,6 +783,10 @@ function registerIpc() {
 
   ipcMain.handle("seika:staff-escape", (_e, { code }) => attemptStaffEscape(code));
   ipcMain.handle("seika:emergency-exit", () => emergencyExit("button"));
+  // Refused while locked: a PC that has not been paid for does not run games.
+  ipcMain.handle("seika:launch-game", (_e, { name }) =>
+    locked ? { ok: false, reason: "The PC is locked" } : launchGame(String(name ?? ""))
+  );
 
   // Null-safe: in recovery mode there is no config, and a handler that threw
   // here left the renderer's getConfig() rejected — so the screen kept its

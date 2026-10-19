@@ -245,6 +245,80 @@
     color: #eaf2ff;
     text-shadow: 0 0 24px rgb(var(--glow-1) / 0.45);
   }
+
+  /* ─── Launcher ──────────────────────────────────────────────────────────
+     What the player sees once the PC is theirs. Not a lock: it gives up
+     focus and can be minimised, because the game they just started has to
+     come to the front. */
+  .lx-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.6rem 2.2rem;
+  }
+  .lx-brand {
+    font-family: var(--font-display, inherit);
+    font-size: 1.5rem;
+    letter-spacing: 0.3em;
+    background: linear-gradient(90deg, #7fe3c4, #7aa7ff, #a78bfa);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .lx-clock { text-align: right; }
+  .lx-clock__value {
+    font-family: var(--font-display, inherit);
+    font-size: clamp(1.8rem, 4vw, 2.8rem);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .lx-clock__label {
+    font-size: 0.72rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.55;
+    margin-top: 0.3rem;
+  }
+  /* Under five minutes the clock stops being decoration. */
+  .lx-clock--low .lx-clock__value { color: #ffb4a2; }
+
+  .lx-main { padding: 0 2.2rem 2.2rem; }
+  .lx-heading {
+    font-size: 0.78rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    opacity: 0.6;
+    margin: 0 0 1rem;
+  }
+  .lx-games {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+    gap: 1rem;
+  }
+  .lx-game {
+    padding: 1.4rem 1.1rem;
+    border-radius: 16px;
+    background: var(--glass-1);
+    border: 1px solid rgb(255 255 255 / 0.08);
+    backdrop-filter: blur(14px);
+    text-align: left;
+    font: inherit;
+    font-size: 1rem;
+    color: inherit;
+    cursor: pointer;
+    box-shadow: var(--lift);
+  }
+  .lx-game:hover:not(:disabled) { border-color: rgb(var(--glow-1) / 0.5); }
+  .lx-game:active:not(:disabled) { box-shadow: var(--press); }
+  .lx-game:disabled { opacity: 0.4; cursor: not-allowed; }
+  .lx-game__name { font-weight: 600; }
+  .lx-game__state {
+    display: block;
+    margin-top: 0.3rem;
+    font-size: 0.78rem;
+    opacity: 0.6;
+  }
+  .lx-note { margin-top: 1.2rem; font-size: 0.85rem; opacity: 0.7; min-height: 1.2em; }
 </style>
 
 <div class="banner" id="banner"></div>
@@ -270,7 +344,21 @@
 </div>
 
 <div class="unlocked">
-  <div class="brand">Enjoy your session</div>
+  <header class="lx-top">
+    <div class="lx-brand">SEIKA</div>
+    <div class="lx-clock">
+      <div class="lx-clock__value" id="lxTime">--:--</div>
+      <div class="lx-clock__label" id="lxLabel">time left</div>
+    </div>
+  </header>
+
+  <main class="lx-main">
+    <h2 class="lx-heading">Your games</h2>
+    <div class="lx-games" id="lxGames"></div>
+    <p class="lx-note" id="lxNote"></p>
+  </main>
+
+  <div class="lx-brand-hidden" hidden>
   <div class="sub">This screen will return when your session ends.</div>
 </div>
 
@@ -364,6 +452,76 @@
     $("reason").insertAdjacentElement("afterend", exit);
     exit.insertAdjacentElement("afterend", details);
   }
+
+  // ─── Launcher ─────────────────────────────────────────────────────────
+  let lxEndsAt = null;
+  let lxOpenSince = null;
+
+  seika.onLauncher((s) => {
+    lxEndsAt = s?.endsAt ? new Date(s.endsAt).getTime() : null;
+    lxOpenSince = s?.startedAt ? new Date(s.startedAt).getTime() : null;
+    renderGames(s?.games ?? []);
+    tickClock();
+  });
+
+  function renderGames(games) {
+    const holder = $("lxGames");
+    holder.replaceChildren();
+    if (!games.length) {
+      $("lxNote").textContent =
+        "No games are set up on this PC yet. Staff can add them in the kiosk config.";
+      return;
+    }
+    $("lxNote").textContent = "";
+    for (const name of games) {
+      const b = document.createElement("button");
+      b.className = "lx-game";
+      b.innerHTML =
+        '<span class="lx-game__name"></span><span class="lx-game__state">Click to play</span>';
+      b.querySelector(".lx-game__name").textContent = name;
+      b.onclick = async () => {
+        const stateEl = b.querySelector(".lx-game__state");
+        b.disabled = true;
+        stateEl.textContent = "Starting…";
+        const res = await seika.launchGame(name);
+        if (res?.ok) {
+          stateEl.textContent = "Running";
+          // The game needs the screen; the launcher is one keystroke away.
+          $("lxNote").textContent = `${name} is starting. Alt-Tab back here any time.`;
+          setTimeout(() => { b.disabled = false; stateEl.textContent = "Click to play"; }, 8000);
+        } else {
+          b.disabled = false;
+          stateEl.textContent = "Click to play";
+          $("lxNote").textContent = res?.reason ?? "Could not start that game.";
+        }
+      };
+      holder.appendChild(b);
+    }
+  }
+
+  /** Counts down to the end, or up from the start on an open session. */
+  function tickClock() {
+    const value = $("lxTime");
+    const label = $("lxLabel");
+    const box = value.closest(".lx-clock");
+    if (!box) return;
+
+    if (lxEndsAt) {
+      const left = Math.max(0, lxEndsAt - Date.now());
+      const m = Math.floor(left / 60000);
+      const sec = Math.floor((left % 60000) / 1000);
+      value.textContent = `${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+      label.textContent = left === 0 ? "time is up" : "time left";
+      box.classList.toggle("lx-clock--low", left > 0 && left < 5 * 60 * 1000);
+    } else if (lxOpenSince) {
+      const up = Date.now() - lxOpenSince;
+      const m = Math.floor(up / 60000);
+      value.textContent = `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+      label.textContent = "playing — open hour";
+      box.classList.remove("lx-clock--low");
+    }
+  }
+  setInterval(tickClock, 1000);
 
   seika.onState(({ locked, reason }) => {
     document.body.dataset.locked = String(locked);

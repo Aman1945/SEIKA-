@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld("seika", {
   onOrder: on("seika:order"),
   onFatal: on("seika:fatal"),
   onEscapePrompt: on("seika:escape-prompt"),
+  onLauncher: on("seika:launcher"),
 
   // Requests the renderer may make.
   getConfig: () => ipcRenderer.invoke("seika:config"),
@@ -49,4 +50,10 @@ contextBridge.exposeInMainWorld("seika", {
    * exist because it lives in the file that is missing.
    */
   emergencyExit: () => ipcRenderer.invoke("seika:emergency-exit"),
+
+  /**
+   * Starts a game by NAME. Main maps it to a path from config.js and refuses
+   * anything not listed, so the renderer can never name an executable.
+   */
+  launchGame: (name) => ipcRenderer.invoke("seika:launch-game", { name }),
 });
