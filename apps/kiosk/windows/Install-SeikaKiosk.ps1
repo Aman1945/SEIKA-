@@ -27,7 +27,8 @@
   Where SEIKA.exe is installed.
 
 .PARAMETER SkipKeyboard
-  Leave the Windows keys alone. Nothing else needs a reboot, so this makes the
+  Leave the Windows keys alone. The Windows keys are the only thing here that
+  needs a reboot; everything else applies as soon as Explorer restarts, which
   install take effect immediately — at the cost of the weakest escape staying
   open. Use it to try the setup, not to run a zone.
 
@@ -161,9 +162,53 @@ else {
 # kiosk process and has a free PC.
 
 Write-Step "Disabling Task Manager"
+# ─── Where policies go ───────────────────────────────────────────────────────
+#
+# Explorer reads most of these from the SIGNED-IN USER's hive, not the
+# machine's. Writing only to HKLM left Run, the context menus and the drive
+# restrictions doing nothing for the player — which is how a "locked" PC still
+# had every Windows escape working.
+#
+# So both: HKLM as the machine default, and the player's own HKCU where it is
+# the one that counts. Per-user also means staff keep a usable desktop.
+
+$script:PlayerHive = $null
+if ($PlayerAccount) {
+  $u = Get-LocalUser -Name $PlayerAccount -ErrorAction SilentlyContinue
+  if ($u) {
+    $sid = $u.SID.Value
+    if (Test-Path "Registry::HKEY_USERS\$sid") {
+      $script:PlayerHive = "Registry::HKEY_USERS\$sid"
+    } else {
+      $dat = Join-Path (Join-Path $env:SystemDrive "Users\$PlayerAccount") "NTUSER.DAT"
+      if (Test-Path $dat) {
+        reg load "HKU\$sid" "$dat" 2>$null | Out-Null
+        $script:PlayerHive = "Registry::HKEY_USERS\$sid"
+        $script:PlayerHiveLoaded = $true
+      }
+    }
+  }
+  if (-not $script:PlayerHive) {
+    Write-Warn "Could not reach $PlayerAccount's registry — policies go machine-wide only."
+    Write-Warn "Sign in as that account once, sign out, then re-run this."
+  }
+}
+
+function Set-Policy {
+  param([string]$Branch, [string]$Name, $Value, [string]$Type = "DWord")
+  $hklm = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\$Branch"
+  New-Item -Path $hklm -Force | Out-Null
+  Set-ItemProperty -Path $hklm -Name $Name -Value $Value -Type $Type
+  if ($script:PlayerHive) {
+    $hkcu = "$script:PlayerHive\Software\Microsoft\Windows\CurrentVersion\Policies\$Branch"
+    New-Item -Path $hkcu -Force | Out-Null
+    Set-ItemProperty -Path $hkcu -Name $Name -Value $Value -Type $Type
+  }
+}
+
 $policySystem = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System"
 New-Item -Path $policySystem -Force | Out-Null
-Set-ItemProperty -Path $policySystem -Name "DisableTaskMgr" -Value 1 -Type DWord
+Set-Policy -Branch "System" -Name "DisableTaskMgr" -Value 1
 
 # ─── 2. The Ctrl+Alt+Del screen ──────────────────────────────────────────────
 # Ctrl+Alt+Del is a secure-attention sequence: no user-space program can
@@ -172,9 +217,9 @@ Set-ItemProperty -Path $policySystem -Name "DisableTaskMgr" -Value 1 -Type DWord
 
 Write-Step "Emptying the Ctrl+Alt+Del screen"
 if ($LockCtrlAltDel) {
-  Set-ItemProperty -Path $policySystem -Name "DisableChangePassword"  -Value 1 -Type DWord
-  Set-ItemProperty -Path $policySystem -Name "DisableLockWorkstation" -Value 1 -Type DWord
-  Set-ItemProperty -Path $policySystem -Name "HideFastUserSwitching"  -Value 1 -Type DWord
+  Set-Policy -Branch "System" -Name "DisableChangePassword" -Value 1
+  Set-Policy -Branch "System" -Name "DisableLockWorkstation" -Value 1
+  Set-Policy -Branch "System" -Name "HideFastUserSwitching" -Value 1
   Write-Ok "Ctrl+Alt+Del stripped"
 } else {
   # Deliberately left working. Pass -LockCtrlAltDel once the rest is proven.
@@ -186,9 +231,9 @@ if ($LockCtrlAltDel) {
 
 $policyExplorer = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer"
 New-Item -Path $policyExplorer -Force | Out-Null
-Set-ItemProperty -Path $policyExplorer -Name "NoLogoff" -Value 1 -Type DWord
+Set-Policy -Branch "Explorer" -Name "NoLogoff" -Value 1
 # No Run dialog, and no right-click taskbar route to Task Manager.
-Set-ItemProperty -Path $policyExplorer -Name "NoRun" -Value 1 -Type DWord
+Set-Policy -Branch "Explorer" -Name "NoRun" -Value 1
 
 # ─── 3. Windows keys ─────────────────────────────────────────────────────────
 # Mapped out at the keyboard driver via Scancode Map. An app-level hook is the
@@ -248,14 +293,14 @@ if (-not $NoHarden) {
   # Run, cmd, PowerShell, the registry editor, Control Panel, Settings. These
   # are the routes someone reaches for first, and none of them is needed to
   # play a game.
-  Set-ItemProperty -Path $policyExplorer -Name "NoRun"               -Value 1 -Type DWord
-  Set-ItemProperty -Path $policyExplorer -Name "NoControlPanel"      -Value 1 -Type DWord
-  Set-ItemProperty -Path $policyExplorer -Name "NoFind"              -Value 1 -Type DWord
-  Set-ItemProperty -Path $policyExplorer -Name "NoViewContextMenu"   -Value 1 -Type DWord
-  Set-ItemProperty -Path $policyExplorer -Name "NoTrayContextMenu"   -Value 1 -Type DWord
-  Set-ItemProperty -Path $policyExplorer -Name "NoSetTaskbar"        -Value 1 -Type DWord
-  Set-ItemProperty -Path $policySystem   -Name "DisableCMD"          -Value 2 -Type DWord
-  Set-ItemProperty -Path $policySystem   -Name "DisableRegistryTools" -Value 1 -Type DWord
+  Set-Policy -Branch "Explorer" -Name "NoRun" -Value 1
+  Set-Policy -Branch "Explorer" -Name "NoControlPanel" -Value 1
+  Set-Policy -Branch "Explorer" -Name "NoFind" -Value 1
+  Set-Policy -Branch "Explorer" -Name "NoViewContextMenu" -Value 1
+  Set-Policy -Branch "Explorer" -Name "NoTrayContextMenu" -Value 1
+  Set-Policy -Branch "Explorer" -Name "NoSetTaskbar" -Value 1
+  Set-Policy -Branch "System" -Name "DisableCMD" -Value 2
+  Set-Policy -Branch "System" -Name "DisableRegistryTools" -Value 1
   Write-Ok "Run, cmd, registry editor and Control Panel closed"
 
   # Named programs refused outright. A blocklist, not a whitelist: a whitelist
@@ -263,7 +308,7 @@ if (-not $NoHarden) {
   # the first one missed is a PC nobody can play on.
   $disallow = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer\DisallowRun"
   New-Item -Path $disallow -Force | Out-Null
-  Set-ItemProperty -Path $policyExplorer -Name "DisallowRun" -Value 1 -Type DWord
+  Set-Policy -Branch "Explorer" -Name "DisallowRun" -Value 1
   $blocked = @(
     "powershell.exe", "powershell_ise.exe", "pwsh.exe", "cmd.exe",
     "regedit.exe", "regedt32.exe", "mmc.exe", "gpedit.msc",
@@ -288,15 +333,15 @@ if (-not $NoHarden) {
   # menu, no lock. A player who can log off is a player who can reach another
   # account, and a PC that can be restarted mid-session is a session nobody
   # can account for.
-  Set-ItemProperty -Path $policyExplorer -Name "NoClose"              -Value 1 -Type DWord
-  Set-ItemProperty -Path $policyExplorer -Name "NoLogoff"             -Value 1 -Type DWord
-  Set-ItemProperty -Path $policyExplorer -Name "StartMenuLogOff"      -Value 1 -Type DWord
-  Set-ItemProperty -Path $policyExplorer -Name "NoFolderOptions"      -Value 1 -Type DWord
-  Set-ItemProperty -Path $policyExplorer -Name "NoDesktop"            -Value 1 -Type DWord
-  Set-ItemProperty -Path $policyExplorer -Name "NoDriveTypeAutoRun"   -Value 255 -Type DWord
+  Set-Policy -Branch "Explorer" -Name "NoClose" -Value 1
+  Set-Policy -Branch "Explorer" -Name "NoLogoff" -Value 1
+  Set-Policy -Branch "Explorer" -Name "StartMenuLogOff" -Value 1
+  Set-Policy -Branch "Explorer" -Name "NoFolderOptions" -Value 1
+  Set-Policy -Branch "Explorer" -Name "NoDesktop" -Value 1
+  Set-Policy -Branch "Explorer" -Name "NoDriveTypeAutoRun" -Value 255
   # Every drive hidden in Explorer: 0x3FFFFFF is A through Z.
-  Set-ItemProperty -Path $policyExplorer -Name "NoDrives"             -Value 67108863 -Type DWord
-  Set-ItemProperty -Path $policyExplorer -Name "NoViewOnDrive"        -Value 67108863 -Type DWord
+  Set-Policy -Branch "Explorer" -Name "NoDrives" -Value 67108863
+  Set-Policy -Branch "Explorer" -Name "NoViewOnDrive" -Value 67108863
   Write-Ok "sign out, shutdown, desktop and drives closed off"
 
   # No installing anything, for anyone who is not an administrator.
@@ -398,6 +443,34 @@ Write-Host "  To reverse everything: .\Uninstall-SeikaKiosk.ps1" -ForegroundColo
 # account the player uses is a standard user. If it is not, this script has
 # given you the appearance of a locked PC and nothing else, and it is worth
 # saying so plainly rather than letting a zone find out the expensive way.
+
+# Explorer caches these at sign-in. Without this, everything above is set and
+# nothing behaves differently until the next login — which is how a PC looks
+# locked down and still has Run, the context menu and every drive.
+if (-not $NoHarden) {
+  Write-Step "Restarting Explorer so the policies take effect now"
+  Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Seconds 2
+  if (-not (Get-Process -Name explorer -ErrorAction SilentlyContinue)) {
+    Start-Process explorer.exe
+  }
+  Write-Ok "Explorer restarted"
+}
+
+if ($script:PlayerHiveLoaded) {
+  [gc]::Collect()
+  reg unload "HKU\$((Get-LocalUser -Name $PlayerAccount).SID.Value)" 2>$null | Out-Null
+}
+
+Write-Host ""
+Write-Host "  RESTART THE PC before testing the lockdown." -ForegroundColor Yellow
+Write-Host "    The Windows keys are disabled at the keyboard driver, and that" -ForegroundColor Yellow
+Write-Host "    only loads at boot. Everything else is live already." -ForegroundColor Yellow
+if (-not $LockCtrlAltDel) {
+  Write-Host ""
+  Write-Host "    Ctrl+Alt+Del still works, on purpose. Add -LockCtrlAltDel to" -ForegroundColor Yellow
+  Write-Host "    remove it once you have finished testing." -ForegroundColor Yellow
+}
 
 Write-Host ""
 $admins = @()

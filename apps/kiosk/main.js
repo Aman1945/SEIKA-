@@ -19,6 +19,7 @@ const QRCode = require("qrcode");
 
 const { KioskApi } = require("./src/api");
 const smartsync = require("./src/smartsync");
+const { detectGames } = require("./src/detect");
 
 /** How often to tell the server this PC is alive (plan B8). */
 const HEARTBEAT_MS = 20_000;
@@ -288,7 +289,7 @@ function allGamePaths() {
  * launcher cannot add a path, which matters because a path is an arbitrary
  * executable this machine will run.
  */
-async function saveGame({ staffToken, name, exePath, procName, remove }) {
+async function saveGame({ staffToken, name, exePath, procName, gameDir, remove }) {
   if (!api || !config) return { ok: false, reason: "This PC is not configured" };
 
   let who;
@@ -334,13 +335,14 @@ async function saveGame({ staffToken, name, exePath, procName, remove }) {
             "or the session cannot close it when time runs out.",
         };
       }
-      current[clean] = { launch: p, process: proc };
+      current[clean] = { launch: p, process: proc, ...(gameDir ? { dir: gameDir } : {}) };
     } else {
       // Checked now rather than at launch, so the mistake is caught by the
       // person who can fix it instead of the player who cannot.
       if (!fs.existsSync(p)) return { ok: false, reason: `Nothing at ${p}` };
       const proc = String(procName ?? "").trim();
-      current[clean] = proc ? { launch: p, process: proc } : p;
+      const dir = String(gameDir ?? "").trim();
+      current[clean] = proc || dir ? { launch: p, process: proc || null, ...(dir ? { dir } : {}) } : p;
     }
   }
 
@@ -1230,6 +1232,26 @@ function registerIpc() {
   ipcMain.handle("seika:emergency-exit", () => emergencyExit("button"));
   // Refused while locked: a PC that has not been paid for does not run games.
   ipcMain.handle("seika:save-game", (_e, payload) => saveGame(payload ?? {}));
+  // Staff-gated like saveGame: knowing what is installed is not secret, but
+  // this is only reachable from the staff panel and keeping the gate in one
+  // place is worth more than the exception.
+  ipcMain.handle("seika:detect-games", async (_e, { staffToken } = {}) => {
+    try {
+      const who = await api?.whoAmI(staffToken);
+      if (who?.auth?.typ !== "staff") return { ok: false, reason: "Staff only" };
+    } catch {
+      return { ok: false, reason: "That sign-in did not work" };
+    }
+    try {
+      const games = detectGames();
+      const have = new Set(Object.keys(allGamePaths()));
+      return { ok: true, games: games.map((g) => ({ ...g, already: have.has(g.name) })) };
+    } catch (err) {
+      logger(`detect failed: ${err.message}`);
+      return { ok: false, reason: "Could not read the launcher libraries" };
+    }
+  });
+
   ipcMain.handle("seika:pick-game", async () => {
     const res = await dialog.showOpenDialog(win, {
       title: "Choose the game",

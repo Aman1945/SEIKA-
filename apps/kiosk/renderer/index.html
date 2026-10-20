@@ -475,9 +475,10 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
           <h3 class="lx-heading">Games on this PC</h3>
           <div id="sfList" class="lx-sflist"></div>
           <div class="lx-row" style="margin-bottom:4px">
-            <button class="lx-btn" id="sfBrowse">Choose a game file…</button>
-            <span class="lx-note">or paste a launcher link below</span>
+            <button class="lx-btn lx-btn--primary" id="sfScan">Scan for Epic and Steam games</button>
+            <button class="lx-btn" id="sfBrowse">Choose a file…</button>
           </div>
+          <div id="sfFound" class="lx-sflist" hidden></div>
           <div class="lx-field"><label for="sfName">Name</label><input id="sfName" placeholder="Valorant" /></div>
           <div class="lx-field">
             <label for="sfPath">Path, shortcut, or launcher link</label>
@@ -767,6 +768,63 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
       list.appendChild(row);
     }
   }
+
+  /*
+   * Everything Epic and Steam already installed.
+   *
+   * The manifests carry the launch link, the executable name and the install
+   * folder — the three things staff were otherwise asked to find by hand, one
+   * of them in Task Manager, while a player waited.
+   */
+  $("sfScan").onclick = async () => {
+    const box = $("sfFound");
+    $("sfMsg").textContent = "Looking…";
+    const r = await seika.detectGames(sfToken);
+    if (!r?.ok) { $("sfMsg").textContent = r?.reason ?? "Scan failed"; return; }
+
+    box.replaceChildren();
+    box.hidden = false;
+    if (!r.games.length) {
+      $("sfMsg").textContent = "Nothing found. Epic and Steam have to be installed on this PC.";
+      box.hidden = true;
+      return;
+    }
+    $("sfMsg").textContent = `${r.games.length} installed`;
+
+    for (const g of r.games) {
+      const row = document.createElement("div");
+      row.className = "lx-sfrow";
+      const n = document.createElement("strong"); n.textContent = g.name;
+      const src = document.createElement("code"); src.textContent = g.source + (g.process ? ` · ${g.process}` : "");
+      row.append(n, src);
+
+      const add = document.createElement("button");
+      add.className = "lx-btn";
+      if (g.already) {
+        add.disabled = true;
+        add.textContent = "Added";
+      } else {
+        add.textContent = "Add";
+        add.onclick = async () => {
+          add.disabled = true;
+          add.textContent = "Adding…";
+          const res = await seika.saveGame({
+            staffToken: sfToken,
+            name: g.name,
+            exePath: g.launch,
+            procName: g.process,
+            gameDir: g.dir,
+          });
+          add.textContent = res.ok ? "Added" : "Failed";
+          $("sfMsg").textContent = res.ok ? `Added ${g.name}` : res.reason;
+          if (!res.ok) { add.disabled = false; add.textContent = "Add"; }
+          else void refreshStaffList();
+        };
+      }
+      row.appendChild(add);
+      box.appendChild(row);
+    }
+  };
 
   $("sfBrowse").onclick = async () => {
     const r = await seika.pickGame();

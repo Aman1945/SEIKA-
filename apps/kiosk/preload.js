@@ -62,4 +62,5 @@ contextBridge.exposeInMainWorld("seika", {
   saveGame: (payload) => ipcRenderer.invoke("seika:save-game", payload),
   listGamePaths: () => ipcRenderer.invoke("seika:list-games"),
   pickGame: () => ipcRenderer.invoke("seika:pick-game"),
+  detectGames: (staffToken) => ipcRenderer.invoke("seika:detect-games", { staffToken }),
 });
