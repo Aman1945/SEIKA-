@@ -263,7 +263,7 @@ function gamesFile() {
   const dir =
     process.platform === "win32"
       ? path.join(process.env.ProgramData || "C:\\ProgramData", "SEIKA")
-      : path.dirname(config?.__source ?? __dirname);
+      : (config?.__source ? path.dirname(config.__source) : __dirname);
   return path.join(dir, "games.json");
 }
 
@@ -927,7 +927,7 @@ function openMaintenanceWindow() {
     const dir =
       process.platform === "win32"
         ? path.join(process.env.ProgramData || "C:\\ProgramData", "SEIKA")
-        : path.dirname(config?.__source ?? __dirname);
+        : (config?.__source ? path.dirname(config.__source) : __dirname);
     fs.mkdirSync(dir, { recursive: true });
     const until = new Date(Date.now() + MAINTENANCE_MINUTES * 60_000).toISOString();
     fs.writeFileSync(path.join(dir, "maintenance.json"), JSON.stringify({ until }, null, 2));
@@ -940,6 +940,36 @@ function openMaintenanceWindow() {
 }
 
 /** Closes the kiosk for real, so the machine can be serviced or uninstalled. */
+/**
+ * Is this account running SEIKA instead of explorer.exe?
+ *
+ * Asked rather than assumed: the installer's -KioskShell is optional, and a
+ * PC set up without it already has a desktop running.
+ */
+function isWindowsShell() {
+  if (process.platform !== "win32") return false;
+  try {
+    const out = require("node:child_process").execSync(
+      'reg query "HKCU\\Software\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon" /v Shell',
+      { encoding: "utf8", windowsHide: true, timeout: 4000 }
+    );
+    return /seika/i.test(out);
+  } catch {
+    // No value set means the machine default — explorer — is running.
+    return false;
+  }
+}
+
+/**
+ * Hands the machine back, completely, the moment the code is accepted.
+ *
+ * With -KioskShell there is no desktop behind the kiosk: SEIKA *is* the
+ * shell. Quitting without starting Explorer would leave staff looking at a
+ * black screen with no taskbar and nothing to click — worse than the lock
+ * they were trying to get past.
+ *
+ * So Explorer comes up first and the kiosk goes second, in that order.
+ */
 function quitForMaintenance() {
   exiting = true;
   locked = false;
@@ -950,6 +980,17 @@ function quitForMaintenance() {
   try {
     socket?.disconnect();
   } catch {}
+
+  if (isWindowsShell()) {
+    try {
+      // Detached, so it outlives the process that is about to end.
+      spawn("explorer.exe", [], { detached: true, stdio: "ignore", windowsHide: false }).unref();
+      logger("started explorer for maintenance");
+    } catch (err) {
+      logger(`could not start explorer: ${err.message}`);
+    }
+  }
+
   if (win && !win.isDestroyed()) {
     win.setKiosk(false);
     win.setAlwaysOnTop(false);
@@ -1014,7 +1055,7 @@ function attemptStaffEscape(code) {
   // to send it with, and a staff escape that is never recorded is exactly the
   // one worth recording.
   openMaintenanceWindow();
-  applyLock(false, "Unlocked by staff for maintenance", { maintenance: true });
+  locked = false;
   quitForMaintenance();
   return { ok: true };
 }
@@ -1024,18 +1065,67 @@ function attemptStaffEscape(code) {
  * flushed on the next heartbeat — the point of the audit trail is that it
  * survives the outage that made the escape necessary.
  */
-async function reportEscape(entry) {
+/** Where unsent escape reports wait out a restart. */
+function escapeQueueFile() {
+  const dir =
+    process.platform === "win32"
+      ? path.join(process.env.ProgramData || "C:\\ProgramData", "SEIKA")
+      : (config?.__source ? path.dirname(config.__source) : __dirname);
+  return path.join(dir, "escape-queue.json");
+}
+
+function persistEscapeQueue() {
+  try {
+    const f = escapeQueueFile();
+    fs.mkdirSync(path.dirname(f), { recursive: true });
+    if (pendingEscapeReports.length) fs.writeFileSync(f, JSON.stringify(pendingEscapeReports));
+    else fs.rmSync(f, { force: true });
+  } catch (err) {
+    logger(`could not persist escape queue: ${err.message}`);
+  }
+}
+
+function loadEscapeQueue() {
+  try {
+    const f = escapeQueueFile();
+    if (!fs.existsSync(f)) return;
+    const q = JSON.parse(fs.readFileSync(f, "utf8"));
+    if (Array.isArray(q)) pendingEscapeReports = [...q, ...pendingEscapeReports];
+  } catch {
+    // A corrupt queue is not worth blocking startup for.
+  }
+}
+
+/**
+ * Records a staff escape.
+ *
+ * Written to disk first, then sent. The escape quits the kiosk immediately —
+ * that is the point of it — so an in-flight request dies with the process. A
+ * staff unlock that never reaches the audit log is exactly the one worth
+ * having, so it waits on disk and goes out on the next start instead.
+ */
+function reportEscape(entry) {
   pendingEscapeReports.push(entry);
-  await flushEscapeReports();
+  persistEscapeQueue();
+  void flushEscapeReports();
 }
 
 async function flushEscapeReports() {
-  if (!pendingEscapeReports.length || !api) return;
+  if (!pendingEscapeReports.length) return;
+  if (!api) {
+    logger(`${pendingEscapeReports.length} escape report(s) waiting — no API yet`);
+    return;
+  }
   const queued = [...pendingEscapeReports];
   try {
     await api.reportStaffEscape(queued);
     pendingEscapeReports = [];
-  } catch {
+    persistEscapeQueue();
+    logger(`sent ${queued.length} queued escape report(s)`);
+  } catch (err) {
+    // Said out loud: a silent failure here is an audit trail that quietly
+    // stops working, and nobody finds out until it is needed.
+    logger(`escape report failed, will retry: ${err.message}`);
     // Keep them. The next heartbeat tries again.
   }
 }
@@ -1187,6 +1277,8 @@ function registerIpc() {
 
 app.whenReady().then(() => {
   registerIpc();
+
+  loadEscapeQueue();
 
   try {
     config = loadConfig();
