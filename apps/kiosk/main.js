@@ -430,6 +430,24 @@ function isProtocolUrl(target) {
   return /^[a-z][a-z0-9+.-]*:\/\//i.test(String(target)) && !/^file:/i.test(String(target));
 }
 
+/**
+ * Never killed, even when they are sitting inside a game's folder.
+ *
+ * Anti-cheat is the part of a game most likely to take offence at being
+ * force-killed, and it is the part we have no reason to touch: closing the
+ * game it protects is enough, and EAC and BattlEye both exit on their own
+ * once it does. Vanguard is a system service that long outlives any session.
+ *
+ * Force-closing a GAME is ordinary — it is what alt-F4 and a power cut look
+ * like, and every game handles it. Force-closing its anti-cheat is not.
+ */
+const NEVER_KILL = [
+  "easyanticheat.exe", "easyanticheat_eos.exe", "easyanticheat_setup.exe",
+  "beservice.exe", "battleye.exe", "bedaisy.exe",
+  "vgc.exe", "vgtray.exe",            // Riot Vanguard
+  "steamservice.exe", "steamwebhelper.exe",
+];
+
 /** PIDs we started, and process names we were told to watch. */
 const running = new Map(); // name -> { pid, process }
 
@@ -599,7 +617,15 @@ function closeRunningGames(why) {
         // /T takes the children too — a launcher's game is a child of the
         // launcher, and killing only the parent leaves the game on screen.
         if (pid) spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" }).unref();
-        if (procName) spawn("taskkill", ["/IM", procName, "/T", "/F"], { stdio: "ignore" }).unref();
+        if (procName && !NEVER_KILL.includes(String(procName).toLowerCase())) {
+          // Graceful, then forced — same reasoning as the sweep below.
+          spawn("taskkill", ["/IM", procName, "/T"], { stdio: "ignore", windowsHide: true }).unref();
+          setTimeout(() => {
+            try {
+              spawn("taskkill", ["/IM", procName, "/T", "/F"], { stdio: "ignore", windowsHide: true }).unref();
+            } catch {}
+          }, 4000);
+        }
 
         if (dir) {
           // Kill by where it runs from, not what it is called. Matching on
@@ -612,7 +638,17 @@ function closeRunningGames(why) {
             "powershell",
             [
               "-NoProfile", "-NonInteractive", "-Command",
-              `Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '${safe}\\*' -and $_.ProcessId -ne ${process.pid} } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`,
+              // Anti-cheat is skipped by name. It lives in the game's folder,
+              // so the directory match would otherwise take it, and that is
+              // the one process worth being careful with.
+              `$skip = @(${NEVER_KILL.map((n) => `'${n}'`).join(",")}); ` +
+                `Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '${safe}\\*' -and $_.ProcessId -ne ${process.pid} -and $skip -notcontains $_.Name.ToLower() } | ` +
+                // CloseMainWindow first: a game asked to close saves and exits
+                // the way it would on alt-F4. Only what ignores that is forced.
+                `ForEach-Object { $p = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; if ($p) { $null = $p.CloseMainWindow(); } }; ` +
+                `Start-Sleep -Seconds 4; ` +
+                `Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '${safe}\\*' -and $_.ProcessId -ne ${process.pid} -and $skip -notcontains $_.Name.ToLower() } | ` +
+                `ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`,
             ],
             { stdio: "ignore", windowsHide: true }
           ).unref();
