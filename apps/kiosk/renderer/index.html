@@ -341,6 +341,50 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
 .exit-details summary { cursor: pointer; text-align: center; }
 .exit-details pre { font-family: var(--mono); white-space: pre-wrap; word-break: break-word; margin-top: 8px; line-height: 1.6; }
 
+/* ─── Staff escape ─────────────────────────────────────────────────────────── */
+
+.escape {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Opaque enough that the lock screen behind it cannot be read: staff are
+     typing a code someone may be standing next to them. */
+  background: rgb(5 6 8 / 0.95);
+}
+.escape[hidden] { display: none; }
+.escape__card {
+  width: 368px;
+  max-width: 90vw;
+  padding: 24px;
+  background: var(--s1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+}
+.escape__title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+.escape__note { margin: 6px 0 16px; font-size: 13px; line-height: 1.5; color: var(--t2); }
+.escape__input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  font: inherit;
+  /* 16px so a touchscreen PC does not zoom the page when it gets focus. */
+  font-size: 16px;
+  font-family: var(--mono);
+  letter-spacing: 0.2em;
+  color: var(--t1);
+  background: var(--s0);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+}
+.escape__input:focus { border-color: var(--accent); outline: none; }
+.escape__error { margin-top: 8px; font-size: 13px; color: var(--bad); }
+.escape__error[hidden] { display: none; }
+.escape__row { display: flex; gap: 8px; margin-top: 16px; }
+.escape__row .lx-btn { flex: 1; }
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
@@ -433,34 +477,20 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
 
 <!-- Staff escape. Hidden until the key combination is pressed, so a player
      never learns it exists by looking at the screen. -->
-<div id="escape" style="display:none;position:fixed;inset:0;z-index:50;
-     background:rgba(10,12,18,.94);align-items:center;justify-content:center;">
-  <div style="background:var(--raised);border:1px solid var(--border);border-radius:22px;
-              padding:30px;width:368px;max-width:90vw;
-              backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);
-              box-shadow:0 1px 0 0 var(--edge) inset, 0 30px 70px -22px rgb(0 0 0 / .8);">
-    <div style="font-size:17px;font-weight:600;margin-bottom:6px;">Staff unlock</div>
-    <div style="font-size:13px;color:var(--dim);margin-bottom:16px;line-height:1.5;">
-      For maintenance. This unlocks the PC without starting a session, and it is
-      recorded on the zone's audit log.
-    </div>
+<div id="escape" class="escape" hidden>
+  <div class="escape__card">
+    <div class="escape__title">Staff unlock</div>
+    <p class="escape__note">
+      For maintenance. This unlocks the PC without starting a session, closes
+      the kiosk so the machine can be worked on, and is recorded on the zone's
+      audit log.
+    </p>
     <input id="escapeCode" type="password" inputmode="numeric" autocomplete="off"
-           placeholder="Staff code"
-           style="width:100%;padding:13px 15px;font-size:16px;border-radius:12px;
-                  border:1px solid var(--border);background:rgb(0 0 0 / .26);color:var(--text);
-                  box-shadow:0 2px 10px -4px rgb(0 0 0 / .55) inset;" />
-    <div id="escapeError" style="color:var(--bad);font-size:13px;margin-top:8px;display:none;"></div>
-    <div style="display:flex;gap:8px;margin-top:16px;">
-      <button id="escapeCancel" style="flex:1;padding:12px;border-radius:12px;cursor:pointer;
-              border:1px solid var(--border);background:transparent;color:var(--text);font:inherit;">
-        Cancel
-      </button>
-      <button id="escapeGo" style="flex:1;padding:12px;border-radius:12px;cursor:pointer;
-              border:none;background:linear-gradient(135deg,var(--accent),#1fb9a0);
-              color:#04211c;font:inherit;font-weight:700;
-              box-shadow:0 8px 22px -8px rgb(51 225 196 / .55);">
-        Unlock
-      </button>
+           placeholder="Staff code" class="escape__input" />
+    <div id="escapeError" class="escape__error" hidden></div>
+    <div class="escape__row">
+      <button id="escapeCancel" class="lx-btn">Cancel</button>
+      <button id="escapeGo" class="lx-btn lx-btn--primary">Unlock</button>
     </div>
   </div>
 </div>
@@ -800,14 +830,16 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
   // ─── Staff escape ──────────────────────────────────────────────────────
   const escape = $("escape");
 
+  // The dialog's visibility is the hidden attribute, not an inline style, so
+  // the stylesheet owns how it looks and this owns only whether it is there.
   function closeEscape() {
-    escape.style.display = "none";
+    escape.hidden = true;
     $("escapeCode").value = "";
-    $("escapeError").style.display = "none";
+    $("escapeError").hidden = true;
   }
 
   seika.onEscapePrompt(() => {
-    escape.style.display = "flex";
+    escape.hidden = false;
     $("escapeCode").focus();
   });
 
@@ -820,7 +852,7 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
     } else {
       const err = $("escapeError");
       err.textContent = res.reason ?? "That did not work";
-      err.style.display = "block";
+      err.hidden = false;
       $("escapeCode").value = "";
       $("escapeCode").focus();
     }
