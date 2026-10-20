@@ -8,7 +8,7 @@
  * arrives from the server, which is the whole point of the product's core rule.
  */
 
-const { app, BrowserWindow, globalShortcut, ipcMain, powerSaveBlocker } = require("electron");
+const { app, shell, dialog, BrowserWindow, globalShortcut, ipcMain, powerSaveBlocker } = require("electron");
 const path = require("node:path");
 const fs = require("node:fs");
 const { spawn } = require("node:child_process");
@@ -288,7 +288,7 @@ function allGamePaths() {
  * launcher cannot add a path, which matters because a path is an arbitrary
  * executable this machine will run.
  */
-async function saveGame({ staffToken, name, exePath, remove }) {
+async function saveGame({ staffToken, name, exePath, procName, remove }) {
   if (!api || !config) return { ok: false, reason: "This PC is not configured" };
 
   let who;
@@ -320,11 +320,28 @@ async function saveGame({ staffToken, name, exePath, remove }) {
     delete current[clean];
   } else {
     const p = String(exePath ?? "").trim().replace(/^"|"$/g, "");
-    if (!p) return { ok: false, reason: "Give the path to the game" };
-    // Checked now rather than at launch, so the mistake is caught by the
-    // person who can fix it instead of the player who cannot.
-    if (!fs.existsSync(p)) return { ok: false, reason: `Nothing at ${p}` };
-    current[clean] = p;
+    if (!p) return { ok: false, reason: "Give the path or launcher link" };
+
+    if (isProtocolUrl(p)) {
+      // Nothing on disk to check — the launcher owns it. The process name is
+      // what lets the session end it later, so it is asked for here.
+      const proc = String(procName ?? "").trim();
+      if (!proc) {
+        return {
+          ok: false,
+          reason:
+            "A launcher link also needs the game's process name (e.g. GTA5.exe), " +
+            "or the session cannot close it when time runs out.",
+        };
+      }
+      current[clean] = { launch: p, process: proc };
+    } else {
+      // Checked now rather than at launch, so the mistake is caught by the
+      // person who can fix it instead of the player who cannot.
+      if (!fs.existsSync(p)) return { ok: false, reason: `Nothing at ${p}` };
+      const proc = String(procName ?? "").trim();
+      current[clean] = proc ? { launch: p, process: proc } : p;
+    }
   }
 
   try {
@@ -383,18 +400,89 @@ async function handoffForSeatedPlayer() {
  * if someone reaches its devtools. A name with no entry in config is simply
  * not a game this PC offers.
  */
+/**
+ * What a game entry can be.
+ *
+ * A string is a path, which is how most installed games work. An object is
+ * for the ones that do not:
+ *
+ *   "Valorant": "C:/Riot Games/.../VALORANT.exe"
+ *   "GTA V":    { launch: "com.epicgames.launcher://apps/xxx?action=launch",
+ *                 process: "GTA5.exe" }
+ *
+ * Epic and Steam do not start a game by running an exe — they hand a URL to
+ * their own launcher, which starts the game as ITS child, not ours. So the
+ * thing we spawn exits immediately and the game we need to stop later is a
+ * process we never owned. `process` names it, so the session can still end.
+ */
+function gameEntry(name) {
+  const all = allGamePaths();
+  if (!Object.prototype.hasOwnProperty.call(all, name)) return null;
+  const v = all[name];
+  return typeof v === "string" ? { launch: v, process: null } : { launch: v?.launch, process: v?.process ?? null };
+}
+
+/** Anything with a scheme is handed to the OS, not spawned. */
+function isProtocolUrl(target) {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(String(target)) && !/^file:/i.test(String(target));
+}
+
+/** PIDs we started, and process names we were told to watch. */
+const running = new Map(); // name -> { pid, process }
+
+/**
+ * Starts a game.
+ *
+ * The renderer sends a NAME, never a path. Targets come only from config, so
+ * the lock screen cannot be talked into running an arbitrary executable even
+ * by someone who reaches its devtools.
+ */
 function launchGame(name) {
-  const paths = allGamePaths();
-  const target = Object.prototype.hasOwnProperty.call(paths, name) ? paths[name] : null;
-  if (!target) return { ok: false, reason: "That game is not set up on this PC" };
+  const entry = gameEntry(name);
+  if (!entry?.launch) return { ok: false, reason: "That game is not set up on this PC" };
+  const target = String(entry.launch);
+
+  // Epic, Steam, anything with a scheme: the OS knows which launcher owns it.
+  if (isProtocolUrl(target)) {
+    return shell
+      .openExternal(target)
+      .then(() => {
+        if (entry.process) running.set(name, { pid: null, process: entry.process });
+        logger(`handed ${name} to the OS: ${target.split("?")[0]}`);
+        return { ok: true };
+      })
+      .catch((err) => {
+        logger(`launch failed ${name}: ${err.message}`);
+        return { ok: false, reason: "The launcher for that game did not open" };
+      });
+  }
 
   if (!fs.existsSync(target)) {
     logger(`game missing on disk: ${name} -> ${target}`);
     return { ok: false, reason: "That game is not installed on this PC any more" };
   }
 
-  // macOS will not start an .app by running the binary inside it — that exits
-  // immediately. Windows, which is where this ships, wants the exe directly.
+  // A Windows shortcut is not a program. Spawning a .lnk fails; the shell
+  // has to resolve it.
+  if (/\.(lnk|url)$/i.test(target)) {
+    return shell
+      .openPath(target)
+      .then((err) => {
+        if (err) {
+          logger(`shortcut failed ${name}: ${err}`);
+          return { ok: false, reason: "That shortcut did not open" };
+        }
+        running.set(name, {
+          pid: null,
+          process: entry.process ?? path.basename(target).replace(/\.(lnk|url)$/i, "") + ".exe",
+        });
+        logger(`opened shortcut ${name}`);
+        return { ok: true };
+      })
+      .catch(() => ({ ok: false, reason: "That shortcut did not open" }));
+  }
+
+  // macOS will not start an .app by running the binary inside it.
   const isMacBundle = process.platform === "darwin" && target.includes(".app/");
   const cmd = isMacBundle ? "open" : target;
   const args = isMacBundle ? ["-a", target.split(".app/")[0] + ".app"] : [];
@@ -402,28 +490,21 @@ function launchGame(name) {
   return new Promise((resolve) => {
     let child;
     try {
-      // Detached and unref'd: the game must outlive the kiosk, not die with
-      // it, and must not hold the kiosk open when it exits.
-      child = spawn(cmd, args, {
-        detached: true,
-        stdio: "ignore",
-        cwd: path.dirname(target),
-      });
+      // Detached: the game must outlive the kiosk, not die with it.
+      child = spawn(cmd, args, { detached: true, stdio: "ignore", cwd: path.dirname(target) });
     } catch (err) {
       logger(`launch failed ${name}: ${err.message}`);
-      resolve({ ok: false, reason: "Could not start that game" });
+      resolve({ ok: false, reason: `Could not start it: ${err.message}` });
       return;
     }
 
-    // spawn resolving is not the game running. A bad path, a missing DLL or a
-    // launcher that refuses will exit within a moment, and the player would
-    // otherwise be looking at "Running" next to nothing happening.
     let settled = false;
     const ok = () => {
       if (settled) return;
       settled = true;
+      running.set(name, { pid: child.pid, process: entry.process ?? path.basename(target) });
       child.unref();
-      logger(`launched ${name}`);
+      logger(`launched ${name} (pid ${child.pid})`);
       resolve({ ok: true });
     };
 
@@ -431,33 +512,93 @@ function launchGame(name) {
       if (settled) return;
       settled = true;
       logger(`launch failed ${name}: ${err.message}`);
-      resolve({ ok: false, reason: "Could not start that game" });
+      resolve({ ok: false, reason: `Could not start it: ${err.message}` });
     });
 
     child.once("exit", (code) => {
       if (settled) return;
       settled = true;
-
-      // `open` is a hand-off, not the app: it tells LaunchServices to start
-      // the bundle and exits 0 straight away. Treating that as a crash marked
-      // every successfully launched Mac app as failed.
+      // `open` on macOS is a hand-off that exits 0 immediately; so is a
+      // game launcher that passes the job to itself.
       if (isMacBundle && code === 0) {
-        child.unref();
+        // `open` has handed off and exited, so there is no pid to hold. The
+        // bundle name is what the app actually runs as.
+        running.set(name, {
+          pid: null,
+          process: entry.process ?? path.basename(target.split(".app/")[0]),
+        });
         logger(`launched ${name}`);
         resolve({ ok: true });
         return;
       }
-
       logger(`${name} exited immediately with code ${code}`);
       resolve({
         ok: false,
-        reason: "That game closed as soon as it started. Tell staff.",
+        reason:
+          "It closed as soon as it started. If this game runs through Epic or " +
+          "Steam, it needs the launcher link rather than an .exe.",
       });
     });
 
     // Survived long enough to be real.
     setTimeout(ok, 2000);
   });
+}
+
+/**
+ * Closes every game this session started.
+ *
+ * A session that ends while the player is still in a game has not really
+ * ended — they keep playing on a PC that is supposed to be locked, and the
+ * lock screen sits behind a fullscreen window. So the games go when the
+ * session does.
+ *
+ * Killed by PID where we own the process, and by name where we do not: a game
+ * started through Epic or Steam belongs to that launcher, not to us.
+ */
+function closeRunningGames(why) {
+  /*
+   * Every game this PC is set up to run, not only the ones we started.
+   *
+   * A player can have a game open from before the kiosk locked, or start one
+   * some other way during a paid session. Closing only what we launched
+   * leaves exactly that case playable behind a lock screen — which is the
+   * case worth closing.
+   */
+  const configured = new Map();
+  try {
+    for (const [name, v] of Object.entries(allGamePaths())) {
+      const target = typeof v === "string" ? v : v?.launch;
+      const proc =
+        typeof v === "string"
+          ? (isProtocolUrl(target) ? null : path.basename(String(target)))
+          : v?.process;
+      if (proc) configured.set(name, { pid: null, process: proc });
+    }
+  } catch {
+    // A broken config must not stop the lock from closing what it can.
+  }
+
+  const entries = [...new Map([...configured, ...running]).entries()];
+  running.clear();
+  if (entries.length === 0) return;
+
+  for (const [name, { pid, process: procName }] of entries) {
+    try {
+      if (process.platform === "win32") {
+        // /T takes the children too — a launcher's game is a child of the
+        // launcher, and killing only the parent leaves the game on screen.
+        if (pid) spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" }).unref();
+        if (procName) spawn("taskkill", ["/IM", procName, "/T", "/F"], { stdio: "ignore" }).unref();
+      } else {
+        if (pid) { try { process.kill(-pid, "SIGKILL"); } catch { process.kill(pid, "SIGKILL"); } }
+        if (procName) spawn("pkill", ["-9", "-f", procName], { stdio: "ignore" }).unref();
+      }
+      logger(`closed ${name} (${why})`);
+    } catch (err) {
+      logger(`could not close ${name}: ${err.message}`);
+    }
+  }
 }
 
 /**
@@ -529,6 +670,9 @@ function applyLock(next, reason, opts = {}) {
   if (!win || win.isDestroyed()) return;
 
   if (locked) {
+    // Before the screen comes up, not after: the lock screen appearing over a
+    // game the player is still in is not a locked PC.
+    closeRunningGames(reason || "locked");
     if (!WINDOWED) win.setKiosk(true);
     win.setAlwaysOnTop(true, "screen-saver");
     win.show();
@@ -971,6 +1115,26 @@ function registerIpc() {
   ipcMain.handle("seika:emergency-exit", () => emergencyExit("button"));
   // Refused while locked: a PC that has not been paid for does not run games.
   ipcMain.handle("seika:save-game", (_e, payload) => saveGame(payload ?? {}));
+  ipcMain.handle("seika:pick-game", async () => {
+    const res = await dialog.showOpenDialog(win, {
+      title: "Choose the game",
+      // Shortcuts included on purpose: a desktop shortcut is how most people
+      // can point at a game they cannot find the exe for.
+      filters:
+        process.platform === "win32"
+          ? [{ name: "Games and shortcuts", extensions: ["exe", "lnk", "url"] }]
+          : [{ name: "Applications", extensions: ["app", ""] }],
+      properties: ["openFile"],
+    });
+    if (res.canceled || !res.filePaths.length) return { ok: false };
+    const picked = res.filePaths[0];
+    return {
+      ok: true,
+      path: picked,
+      // A sensible default name, so staff usually only have to confirm it.
+      name: path.basename(picked).replace(/\.(exe|lnk|url|app)$/i, ""),
+    };
+  });
   ipcMain.handle("seika:list-games", () => ({ ok: true, games: allGamePaths() }));
   ipcMain.handle("seika:launch-game", (_e, { name }) =>
     locked ? { ok: false, reason: "The PC is locked" } : launchGame(String(name ?? ""))
@@ -1033,6 +1197,7 @@ app.on("window-all-closed", (e) => {
 });
 
 app.on("will-quit", () => {
+  closeRunningGames("kiosk quitting");
   stopAssertingLock();
   globalShortcut.unregisterAll();
   if (heartbeatTimer) clearInterval(heartbeatTimer);

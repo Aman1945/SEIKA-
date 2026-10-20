@@ -61,4 +61,5 @@ contextBridge.exposeInMainWorld("seika", {
   /** Staff-only; main verifies the token with the server before writing. */
   saveGame: (payload) => ipcRenderer.invoke("seika:save-game", payload),
   listGamePaths: () => ipcRenderer.invoke("seika:list-games"),
+  pickGame: () => ipcRenderer.invoke("seika:pick-game"),
 });

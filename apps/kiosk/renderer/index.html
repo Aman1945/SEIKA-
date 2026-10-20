@@ -61,6 +61,21 @@
 
 * { box-sizing: border-box; }
 
+/*
+ * Everything in the launcher is sized in rem against this, so one number
+ * scales the whole screen. A 2K monitor is twice the pixels of a 1080p one at
+ * the same physical size, and fixed px made every control half as big as it
+ * should be — on a screen a player stands in front of.
+ */
+html {
+  /* Scales smoothly with width rather than jumping at breakpoints: a monitor
+     is not a phone, and a player standing in front of a 2K screen at 100%
+     Windows scaling was getting controls at half the size they should be.
+     1366 → 16px, 1920 → 22px, 2560 → 30px, 3840 → 32px (capped). */
+  font-size: clamp(16px, 1.17vw, 32px);
+  background: var(--s0);
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -189,29 +204,29 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px clamp(16px, 2.4vw, 32px);
+  padding: 1rem clamp(1rem, 2.4vw, 2rem);
   border-bottom: 1px solid var(--line);
 }
-.lx-brand { font-size: 15px; font-weight: 700; letter-spacing: 0.26em; color: var(--t1); }
+.lx-brand { font-size: 0.94rem; font-weight: 700; letter-spacing: 0.26em; color: var(--t1); }
 
 .lx-clock { text-align: right; }
 .lx-clock__value {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  font-size: clamp(22px, 4vh, 34px);
+  font-size: clamp(1.6rem, 5vh, 3rem);
   font-weight: 500;
   line-height: 1;
   letter-spacing: -0.02em;
 }
-.lx-clock__label { margin-top: 3px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t2); }
+.lx-clock__label { margin-top: 0.2rem; font-size: 0.62rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t2); }
 /* Under five minutes the clock stops being decoration. */
 .lx-clock--low .lx-clock__value { color: var(--warn); }
 
 .lx-main {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px clamp(16px, 2.4vw, 32px) 20px;
+  gap: 0.9rem;
+  padding: 1rem clamp(1rem, 2.4vw, 2rem) 1.25rem;
   min-height: 0;
   overflow-y: auto;
 }
@@ -220,8 +235,8 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
 .lx-col--dash .lx-dash { flex: 1; }
 
 .lx-heading {
-  margin: 0 0 8px;
-  font-size: 10px;
+  margin: 0 0 0.5rem;
+  font-size: 0.62rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   text-transform: uppercase;
@@ -230,13 +245,13 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
 
 /* The games strip scrolls sideways rather than growing a second row and
    pushing the dashboard off a short screen. */
-.lx-games { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.lx-games { display: flex; gap: 0.5rem; overflow-x: auto; padding-bottom: 0.25rem; }
 .lx-game {
   flex: 0 0 auto;
-  min-width: 164px;
-  padding: 12px 14px;
+  min-width: 11rem;
+  padding: 0.85rem 1rem;
   text-align: left;
-  font: inherit; font-size: 14px; color: inherit;
+  font: inherit; font-size: 0.94rem; color: inherit;
   background: var(--s1);
   border: 1px solid var(--line);
   border-radius: var(--r-md);
@@ -246,9 +261,9 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
 .lx-game:hover:not(:disabled) { background: var(--s2); border-color: var(--line-strong); }
 .lx-game:disabled { opacity: 0.45; cursor: not-allowed; }
 .lx-game__name { font-weight: 600; }
-.lx-game__state { display: block; margin-top: 2px; font-size: 11px; color: var(--t2); }
+.lx-game__state { display: block; margin-top: 0.15rem; font-size: 0.7rem; color: var(--t2); }
 
-.lx-note { margin: 8px 0 0; font-size: 12px; color: var(--t2); }
+.lx-note { margin: 0.5rem 0 0; font-size: 0.78rem; color: var(--t2); }
 .lx-note:empty { display: none; }
 
 .lx-dash {
@@ -263,14 +278,14 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
    height falls back to its intrinsic 150px and the guest page lays out in a
    150px-tall viewport inside a 600px panel. */
 .lx-dash webview, .lx-dash iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: flex; }
-.lx-dash__msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center; font-size: 13px; color: var(--t2); }
+.lx-dash__msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 1.25rem; text-align: center; font-size: 0.85rem; color: var(--t2); }
 
 /* ─── Controls ─────────────────────────────────────────────────────────────── */
 
 .lx-btn, .lx-staff-open, .exit-btn {
-  min-height: 36px;
-  padding: 0 16px;
-  font: inherit; font-size: 13px; font-weight: 500;
+  min-height: 2.4rem;
+  padding: 0 1rem;
+  font: inherit; font-size: 0.85rem; font-weight: 500;
   color: var(--t1);
   background: var(--s2);
   border: 1px solid var(--line-strong);
@@ -282,19 +297,19 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
 .lx-btn:disabled, .exit-btn:disabled { opacity: 0.45; cursor: default; }
 .lx-btn--primary, .exit-btn { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .lx-btn--primary:hover:not(:disabled), .exit-btn:hover:not(:disabled) { filter: brightness(1.1); }
-.lx-staff-open { margin-top: 10px; background: transparent; color: var(--t2); }
+.lx-staff-open { margin-top: 0.6rem; background: transparent; color: var(--t2); }
 .lx-staff-open:hover { color: var(--t1); }
 
 :where(button, input, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
-.lx-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-.lx-field { margin: 12px 0; }
-.lx-field label { display: block; margin-bottom: 5px; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t2); }
+.lx-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin-top: 0.6rem; }
+.lx-field { margin: 0.75rem 0; }
+.lx-field label { display: block; margin-bottom: 0.3rem; font-size: 0.62rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t2); }
 .lx-field input {
   width: 100%;
-  min-height: 40px;
-  padding: 0 12px;
-  font: inherit; font-size: 15px; color: var(--t1);
+  min-height: 2.6rem;
+  padding: 0 0.75rem;
+  font: inherit; font-size: 1rem; color: var(--t1);
   background: var(--s0);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-sm);
@@ -308,11 +323,11 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
   inset: 0;
   z-index: 40;
   margin: auto;
-  width: min(560px, calc(100vw - 32px));
+  width: min(38rem, calc(100vw - 2rem));
   height: fit-content;
   max-height: calc(100vh - 48px);
   overflow-y: auto;
-  padding: 20px;
+  padding: 1.25rem;
   background: var(--s1);
   border: 1px solid var(--line-strong);
   border-radius: var(--r-md);
@@ -330,8 +345,8 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
 }
 .lx-staff__close:hover { color: var(--t1); background: var(--s2); }
 .lx-sflist { display: grid; gap: 1px; margin-bottom: 14px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
-.lx-sfrow { display: flex; align-items: center; gap: 10px; padding: 9px 11px; background: var(--s1); font-size: 13px; }
-.lx-sfrow code { font-family: var(--mono); font-size: 11px; color: var(--t3); word-break: break-all; }
+.lx-sfrow { display: flex; align-items: center; gap: 0.6rem; padding: 0.55rem 0.7rem; background: var(--s1); font-size: 0.85rem; }
+.lx-sfrow code { font-family: var(--mono); font-size: 0.7rem; color: var(--t3); word-break: break-all; }
 .lx-sfrow button { margin-left: auto; }
 
 /* ─── Recovery ─────────────────────────────────────────────────────────────── */
@@ -454,8 +469,24 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
         <div id="sfPanel" hidden>
           <h3 class="lx-heading">Games on this PC</h3>
           <div id="sfList" class="lx-sflist"></div>
+          <div class="lx-row" style="margin-bottom:4px">
+            <button class="lx-btn" id="sfBrowse">Choose a game file…</button>
+            <span class="lx-note">or paste a launcher link below</span>
+          </div>
           <div class="lx-field"><label for="sfName">Name</label><input id="sfName" placeholder="Valorant" /></div>
-          <div class="lx-field"><label for="sfPath">Path to the .exe</label><input id="sfPath" placeholder="C:/Riot Games/..." /></div>
+          <div class="lx-field">
+            <label for="sfPath">Path, shortcut, or launcher link</label>
+            <input id="sfPath" placeholder="C:/… .exe   or   com.epicgames.launcher://apps/…" />
+          </div>
+          <div class="lx-field" id="sfProcWrap">
+            <label for="sfProc">Process name — needed for Epic and Steam</label>
+            <input id="sfProc" placeholder="GTA5.exe" />
+            <p class="lx-note">
+              Epic and Steam start the game themselves, so SEIKA never owns it.
+              This is the name it runs under, and it is how the session closes
+              the game when time runs out. Find it in Task Manager → Details.
+            </p>
+          </div>
           <div class="lx-row">
             <button class="lx-btn lx-btn--primary" id="sfAdd">Add game</button>
             <button class="lx-btn" id="sfOut">Sign out</button>
@@ -709,11 +740,13 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
       list.appendChild(p);
       return;
     }
-    for (const [name, p] of entries) {
+    for (const [name, v] of entries) {
       const row = document.createElement("div");
       row.className = "lx-sfrow";
       const n = document.createElement("strong"); n.textContent = name;
-      const c = document.createElement("code"); c.textContent = p;
+      const c = document.createElement("code");
+      // An entry is a path, or an object for launcher-started games.
+      c.textContent = typeof v === "string" ? v : `${v.launch}  ·  ${v.process}`;
       row.append(n, c);
       if (sfToken) {
         const rm = document.createElement("button");
@@ -730,14 +763,26 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
     }
   }
 
+  $("sfBrowse").onclick = async () => {
+    const r = await seika.pickGame();
+    if (!r?.ok) return;
+    $("sfPath").value = r.path;
+    // Only fill the name if staff have not typed one — their wording wins.
+    if (!$("sfName").value.trim()) $("sfName").value = r.name;
+  };
+
   $("sfAdd").onclick = async () => {
     const r = await seika.saveGame({
       staffToken: sfToken,
       name: $("sfName").value,
       exePath: $("sfPath").value,
+      procName: $("sfProc").value,
     });
     $("sfMsg").textContent = r.ok ? "Added" : r.reason;
-    if (r.ok) { $("sfName").value = ""; $("sfPath").value = ""; void refreshStaffList(); }
+    if (r.ok) {
+      $("sfName").value = ""; $("sfPath").value = ""; $("sfProc").value = "";
+      void refreshStaffList();
+    }
   };
 
   seika.onDashboard(({ url, error }) => {
@@ -757,6 +802,20 @@ body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; ove
 
     const view = document.createElement("webview");
     view.setAttribute("src", url);
+
+    /*
+     * The embedded app is its own page with its own root size, so the rem
+     * scaling that grows this screen on a 2K monitor does not reach inside it
+     * — the launcher came out full size with a postage stamp of a dashboard
+     * in the middle. Zoom scales the whole guest page as one unit, driven by
+     * the same number, so the two stay in proportion.
+     */
+    const applyZoom = () => {
+      const root = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+      try { view.setZoomFactor(Math.min(2.2, Math.max(1, root / 16))); } catch {}
+    };
+    view.addEventListener("dom-ready", applyZoom);
+    window.addEventListener("resize", applyZoom);
     // No preload, no node, its own partition: nothing of this page is shared.
     view.setAttribute("partition", "persist:seika-player");
     view.addEventListener("did-fail-load", (e) => {
