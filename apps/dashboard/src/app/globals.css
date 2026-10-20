@@ -1,912 +1,409 @@
-/*
- * SEIKA dashboard — glass over an ambient dark room.
+/* ─── SEIKA design tokens ────────────────────────────────────────────────────
  *
- * Two ideas, kept apart on purpose:
+ * Swiss grid, dark. One accent. Flat surfaces with real steps, hairline
+ * borders, square geometry.
  *
- *   Glass is for surfaces. Panels are translucent and blurred so the ambient
- *   colour behind shows through, which is what gives the product depth without
- *   drawing a single extra line.
+ * No glass, no gradient text, no pills. Those read as decoration, and a
+ * console someone stares at for a whole shift should be structure and
+ * typography — the screen's job is to be read quickly, not admired.
  *
- *   Soft depth is for controls. Buttons and tiles get a light edge from above
- *   and a shadow below, so they read as raised, and invert to inset when
- *   pressed. That is the neumorphic half, used only where a thing is meant to
- *   be touched.
- *
- * What is deliberately NOT borrowed from either style is their contrast. Pure
- * neumorphism puts grey text on grey and glassmorphism lets backgrounds bleed
- * through labels; both look lovely in a screenshot and fail at a counter at
- * 2am, which is where this screen actually lives. So text sits on its own
- * opaque-enough layer and stays at AA or better.
- *
- * Mobile-first: the plan makes owner-on-a-phone a P0 case.
+ * Keep this block identical in:
+ *   apps/dashboard/src/app/globals.css
+ *   apps/player/src/app/globals.css
+ *   apps/kiosk/renderer/index.html
  */
-
 :root {
-  color-scheme: dark;
+  /* Surfaces are real steps, not transparency. Each is a distinct plane, so
+     depth survives a bright room and a cheap monitor. */
+  --s0: #0a0b0d;
+  --s1: #101216;
+  --s2: #171a1f;
+  --s3: #1f232a;
 
-  /* Base — a deep blue-black, not pure black, so glass has something to tint */
-  --bg: #0c1020;
-  --bg-deep: #0a0e1e;
+  /* Hairlines separate things. Shadows used to, and they blurred the grid. */
+  --line: #262b33;
+  --line-strong: #39414d;
 
-  /* Ambient light sources behind the glass */
-  --glow-1: 139 108 255;  /* violet  */
-  --glow-2: 51 225 196;   /* mint    */
-  --glow-3: 92 150 255;   /* blue    */
-  --glow-4: 255 94 164;   /* magenta — a warm counterweight to all the cool  */
+  --t1: #e8eaed;
+  --t2: #99a1ad;
+  --t3: #6b7380;
 
-  /*
-   * Glass surfaces. Three depths, consistently applied.
-   *
-   * These alphas look high written down and are not: the panels sit over a
-   * near-black room, so anything lower and the blur has nothing to show —
-   * every card reads as flat black and the whole effect disappears.
-   */
-  --glass-1: rgb(255 255 255 / 0.07);
-  --glass-2: rgb(255 255 255 / 0.10);
-  --glass-3: rgb(255 255 255 / 0.15);
-  --glass-edge: rgb(255 255 255 / 0.14);
-  --glass-edge-bright: rgb(255 255 255 / 0.28);
+  /* One accent. If something is this colour it can be pressed; if it can be
+     pressed it is this colour. That rule is the whole system. */
+  --accent: #4d7cfe;
+  --accent-ink: #ffffff;
+  --accent-weak: #16213f;
 
-  /* Text. Contrast is the one thing this design does not trade away. */
-  --text: #f2f5fb;        /* ~16:1 on base */
-  --text-dim: #a8b4c9;    /* ~7:1  */
-  --text-faint: #7b8699;  /* ~4.6:1 — the floor, used for labels only */
+  /* Status sits outside the accent, except OCCUPIED — a PC in use is the
+     active state, and reading it as the accent is correct rather than a clash. */
+  --ok: #3fb950;
+  --warn: #d29922;
+  --bad: #f85149;
+  --idle: #6b7380;
 
-  --accent: #7c5cff;
-  --accent-soft: rgb(124 92 255 / 0.16);
-  --mint: #33e1c4;
-  --mint-soft: rgb(51 225 196 / 0.14);
+  /* Square enough to read as a control surface. */
+  --r-sm: 2px;
+  --r-md: 4px;
+  --r-lg: 6px;
 
-  --ok: #3ddc97;
-  --busy: #4f8cff;
-  --warn: #ffb454;
-  --bad: #ff6b7a;
-  --idle: #8993a8;
+  /* 8px rhythm, dense end — this is a dashboard, not a landing page. */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
 
-  --radius: 18px;
-  --radius-sm: 12px;
-  --radius-xs: 9px;
-  --gap: 14px;
-
-  /* Soft depth: light from above, shadow below. */
-  --lift: 0 1px 0 0 var(--glass-edge-bright) inset,
-          0 1px 24px -6px rgb(255 255 255 / 0.06) inset,
-          0 10px 34px -10px rgb(0 0 0 / 0.7);
-  --lift-sm: 0 1px 0 0 var(--glass-edge-bright) inset,
-             0 5px 16px -7px rgb(0 0 0 / 0.6);
-  --press: 0 2px 8px -4px rgb(0 0 0 / 0.5) inset,
-           0 1px 0 0 rgb(255 255 255 / 0.05);
-
-  --blur: blur(26px) saturate(170%);
-  --blur-sm: blur(16px) saturate(155%);
-
-  --ease: cubic-bezier(0.22, 1, 0.36, 1);
-
-  --font: var(--font-ui), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-display: var(--font-display), var(--font-ui), system-ui, sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  --font: var(--font-ui), "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Tabular figures everywhere a number can change: timers, money, counts.
+     Proportional digits make a running clock jitter sideways. */
+  --mono: var(--font-mono), "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
 }
 
-* {
-  box-sizing: border-box;
-}
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
 
-html {
-  background: var(--bg-deep);
-}
+* { box-sizing: border-box; }
+
+html { background: var(--s0); }
 
 body {
   margin: 0;
-  padding: 0;
   min-height: 100dvh;
-  color: var(--text);
+  background: var(--s0);
+  color: var(--t1);
   font-family: var(--font);
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-/*
- * The ambient room. Three slow-moving colour fields behind everything, which
- * is what the glass is actually refracting — without them the blur has nothing
- * to do and every panel reads as flat grey.
- */
-body::before {
-  content: "";
-  position: fixed;
-  inset: -20%;
-  z-index: -1;
-  pointer-events: none;
-  /*
-   * Positions matter as much as opacity: orbs parked in the corners end up
-   * behind the sidebar and off the edges, so the content area — the part
-   * anyone actually looks at — gets no light and every panel reads flat.
-   * These sit inside the working area.
-   */
-  background:
-    radial-gradient(48rem 40rem at 22% 8%, rgb(var(--glow-1) / 0.50), transparent 62%),
-    radial-gradient(44rem 36rem at 92% 22%, rgb(var(--glow-3) / 0.40), transparent 60%),
-    radial-gradient(46rem 38rem at 58% 92%, rgb(var(--glow-2) / 0.32), transparent 60%),
-    radial-gradient(32rem 28rem at 4% 66%, rgb(var(--glow-4) / 0.22), transparent 64%);
-}
+.mono, .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.small { font-size: 12px; }
+.dim   { color: var(--t2); }
+.faint { color: var(--t3); }
 
-.num {
-  font-variant-numeric: tabular-nums;
-}
-
-.mono {
-  font-family: var(--mono);
-  font-size: 0.86em;
-  letter-spacing: -0.01em;
-}
+h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -0.01em; }
+h1 { font-size: 20px; }
+h2 { font-size: 16px; }
 
 /* ─── Shell ────────────────────────────────────────────────────────────────── */
 
-.shell {
-  min-height: 100dvh;
+.shell { display: grid; grid-template-columns: 212px minmax(0, 1fr); min-height: 100dvh; }
+
+.nav {
   display: flex;
   flex-direction: column;
-}
-
-.topbar {
+  gap: 1px;
+  padding: var(--sp-4) var(--sp-3);
+  background: var(--s1);
+  border-right: 1px solid var(--line);
   position: sticky;
   top: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  gap: var(--gap);
-  padding: 12px 16px;
-  background: rgb(10 13 26 / 0.46);
-  backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
-  border-bottom: 1px solid var(--glass-edge);
-}
-
-.topbar__brand {
-  font-family: var(--font-display);
-  font-size: 15px;
-  letter-spacing: 2px;
-  background: linear-gradient(100deg, var(--mint), var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-}
-
-.topbar__zone {
-  color: var(--text-dim);
-  font-size: 12px;
-  letter-spacing: 0.4px;
-  text-transform: uppercase;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.topbar__right {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.main {
-  flex: 1;
-  padding: 16px;
-  padding-bottom: 96px; /* clear the tab bar */
-  max-width: 1280px;
-  width: 100%;
-  margin: 0 auto;
-}
-
-/*
- * Navigation is a bottom tab bar on a phone and a rail on a desktop. Same
- * markup and the same permissions either way — the plan is explicit that
- * mobile is not a weaker layer.
- */
-.nav {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 30;
-  display: flex;
-  gap: 4px;
-  padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px));
-  background: rgb(10 13 26 / 0.55);
-  backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
-  border-top: 1px solid var(--glass-edge);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.nav::-webkit-scrollbar {
-  display: none;
+  height: 100dvh;
+  overflow-y: auto;
 }
 
 .nav__item {
-  flex: 1 0 auto;
-  min-width: 66px;
-  min-height: 50px; /* thumb-sized: a cashier taps this mid-shift */
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-  color: var(--text-faint);
+  gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--r-sm);
+  color: var(--t2);
   text-decoration: none;
-  font-size: 11px;
-  font-weight: 500;
-  transition: color 180ms var(--ease), background 180ms var(--ease);
+  font-size: 13px;
+  /* A 2px rail, not a filled blob: it marks position without shouting. */
+  border-left: 2px solid transparent;
+  transition: color 120ms ease, background 120ms ease;
 }
-
+.nav__item:hover { color: var(--t1); background: var(--s2); }
 .nav__item[data-active="true"] {
-  color: var(--mint);
-  background: var(--mint-soft);
-  box-shadow: var(--lift-sm);
+  color: var(--t1);
+  background: var(--s2);
+  border-left-color: var(--accent);
+  font-weight: 500;
 }
+.nav__icon { width: 16px; display: grid; place-items: center; opacity: 0.8; }
 
-.nav__icon {
-  font-size: 17px;
-  line-height: 1;
-}
+.main { padding: var(--sp-5) var(--sp-6); max-width: 1600px; }
+.page-sub { margin: var(--sp-1) 0 var(--sp-5); color: var(--t2); font-size: 13px; }
 
-@media (min-width: 900px) {
-  .shell {
-    flex-direction: row;
-  }
-
-  .shell__body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-  }
-
-  .nav {
-    position: sticky;
-    top: 0;
-    bottom: auto;
-    height: 100dvh;
-    width: 212px;
-    flex-direction: column;
-    gap: 4px;
-    padding: 18px 12px;
-    border-top: none;
-    border-right: 1px solid var(--glass-edge);
-    overflow-y: auto;
-  }
-
-  .nav__item {
-    flex: 0 0 auto;
-    flex-direction: row;
-    justify-content: flex-start;
-    gap: 11px;
-    font-size: 14px;
-    padding: 11px 14px;
-  }
-
-  .main {
-    padding: 24px 28px 48px;
-  }
-}
-
-/* ─── Glass surfaces ───────────────────────────────────────────────────────── */
+/* ─── Surfaces ─────────────────────────────────────────────────────────────── */
 
 .card {
-  background: var(--glass-1);
-  backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--radius);
-  box-shadow: var(--lift);
-  padding: 16px;
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  padding: var(--sp-4);
 }
-
-.card--flush {
-  padding: 0;
-  overflow: hidden;
-}
+.card--flush { padding: 0; overflow: hidden; }
 
 .card__head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--line);
 }
-
 .card__title {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.3px;
-  margin: 0;
-}
-
-.card__actions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-}
-
-h1 {
-  font-family: var(--font-display);
-  font-size: 23px;
-  letter-spacing: 0.5px;
-  margin: 0 0 4px;
-}
-
-h2 {
-  font-size: 15px;
-  font-weight: 600;
-  margin: 26px 0 12px;
-  letter-spacing: 0.2px;
-}
-
-h3 {
-  font-size: 13px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.page-sub {
-  color: var(--text-dim);
-  font-size: 13px;
-  margin: 0 0 20px;
-}
-
-.grid {
-  display: grid;
-  gap: var(--gap);
-  grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
-}
-
-/* A stat tile: glass, lifted, with the number carrying the weight. */
-.stat {
-  position: relative;
-  background: var(--glass-1);
-  backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--radius);
-  box-shadow: var(--lift);
-  padding: 14px 16px;
-  overflow: hidden;
-}
-
-/* A sheen along the top edge — the single cue that says "glass". */
-.stat::after {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--glass-edge-bright) 30%,
-    var(--glass-edge-bright) 70%,
-    transparent
-  );
-}
-
-.stat__label {
-  font-size: 10px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-faint);
-  font-weight: 600;
+  color: var(--t2);
 }
+.card__actions { margin-left: auto; display: flex; gap: var(--sp-2); }
 
-.stat__value {
-  font-family: var(--font-display);
-  font-size: 26px;
-  font-variant-numeric: tabular-nums;
-  margin-top: 4px;
-  letter-spacing: 0.5px;
-}
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--sp-3); }
 
-.stat__note {
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-top: 3px;
-}
+/* ─── Controls ─────────────────────────────────────────────────────────────── */
 
-/* ─── Controls — this is where the soft/neumorphic half lives ─────────────── */
-
-button,
 .btn {
-  font: inherit;
-  font-family: var(--font);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text);
-  background: var(--glass-2);
-  backdrop-filter: var(--blur-sm);
-  -webkit-backdrop-filter: var(--blur-sm);
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--lift-sm);
-  padding: 10px 16px;
-  cursor: pointer;
-  text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  min-height: 44px; /* Apple HIG minimum */
-  transition: transform 160ms var(--ease), box-shadow 160ms var(--ease),
-    background 160ms var(--ease), border-color 160ms var(--ease);
-}
-
-button:hover:not(:disabled),
-.btn:hover {
-  background: var(--glass-3);
-  border-color: var(--glass-edge-bright);
-}
-
-/* Pressed inverts the light: the control sinks instead of moving the layout. */
-button:active:not(:disabled),
-.btn:active {
-  box-shadow: var(--press);
-  transform: translateY(1px);
-}
-
-button:focus-visible,
-.btn:focus-visible,
-a:focus-visible {
-  outline: 2px solid var(--mint);
-  outline-offset: 2px;
-}
-
-button:disabled {
-  opacity: 0.42;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-.btn--primary {
-  background: linear-gradient(135deg, var(--mint), #1fb9a0);
-  border-color: transparent;
-  color: #03201c;
-  font-weight: 600;
-}
-
-.btn--primary:hover {
-  background: linear-gradient(135deg, #4ae9ce, var(--mint));
-}
-
-.btn--danger {
-  color: var(--bad);
-  border-color: rgb(255 107 122 / 0.32);
-  background: rgb(255 107 122 / 0.08);
-}
-
-.btn--sm {
-  font-size: 13px;
-  padding: 7px 12px;
+  gap: var(--sp-2);
+  /* 36px tall: a pointer target staff hit hundreds of times a shift. */
   min-height: 36px;
-  border-radius: var(--radius-xs);
-}
-
-.btn-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-/* Inputs are concave — the inset counterpart to a raised button. */
-input,
-select,
-textarea {
+  padding: 0 var(--sp-4);
   font: inherit;
-  font-family: var(--font);
-  font-size: 15px; /* 16px-ish stops iOS zooming the page on focus */
-  color: var(--text);
-  background: rgb(0 0 0 / 0.22);
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--press);
-  padding: 11px 14px;
-  width: 100%;
-  min-height: 44px;
-  transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--t1);
+  background: var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.btn:hover:not(:disabled) { background: var(--s3); border-color: var(--t3); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn--primary:hover:not(:disabled) { filter: brightness(1.1); }
+.btn--danger { background: transparent; border-color: var(--bad); color: var(--bad); }
+.btn--danger:hover:not(:disabled) { background: var(--bad); color: #fff; }
+.btn--sm { min-height: 28px; padding: 0 var(--sp-3); font-size: 12px; }
+.btn-row { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+
+/* Keyboard users get the same ring everywhere, and it is never removed. */
+:where(a, button, input, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: rgb(51 225 196 / 0.55);
-  box-shadow: var(--press), 0 0 0 3px var(--mint-soft);
-}
-
-input::placeholder {
-  color: var(--text-faint);
-}
-
-label {
-  display: block;
+.field { display: grid; gap: var(--sp-2); margin-bottom: var(--sp-3); }
+.field label {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--text-faint);
-  margin-bottom: 6px;
+  color: var(--t2);
 }
-
-.field {
-  margin-bottom: 14px;
+.field input, .field select {
+  min-height: 36px;
+  padding: 0 var(--sp-3);
+  font: inherit;
+  font-size: 14px;
+  color: var(--t1);
+  background: var(--s0);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
 }
-
-/* ─── Tables ───────────────────────────────────────────────────────────────── */
-
-.table-wrap {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-
-th {
-  text-align: left;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-faint);
-  font-weight: 700;
-  padding: 11px 14px;
-  border-bottom: 1px solid var(--glass-edge);
-  white-space: nowrap;
-}
-
-td {
-  padding: 12px 14px;
-  border-bottom: 1px solid rgb(255 255 255 / 0.045);
-  vertical-align: middle;
-}
-
-tbody tr {
-  transition: background 140ms var(--ease);
-}
-
-tbody tr:hover {
-  background: rgb(255 255 255 / 0.03);
-}
-
-tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.right {
-  text-align: right;
-}
+.field input:focus { border-color: var(--accent); outline: none; }
 
 /* ─── Status ───────────────────────────────────────────────────────────────── */
 
+/* A square tag, not a pill. Pills everywhere is the look we are leaving. */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  padding: 2px 6px;
+  font-family: var(--mono);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 500;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.7px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid;
-  white-space: nowrap;
-  backdrop-filter: var(--blur-sm);
-  -webkit-backdrop-filter: var(--blur-sm);
+  color: var(--t2);
+  background: var(--s2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
 }
+.dot { width: 6px; height: 6px; border-radius: 1px; background: var(--idle); }
+.dot[data-ok="true"]  { background: var(--ok); }
+.dot[data-ok="false"] { background: var(--bad); }
 
-.badge[data-tone="ok"] {
-  color: var(--ok);
-  border-color: rgb(61 220 151 / 0.34);
-  background: rgb(61 220 151 / 0.11);
-}
-.badge[data-tone="busy"] {
-  color: var(--busy);
-  border-color: rgb(79 140 255 / 0.34);
-  background: rgb(79 140 255 / 0.11);
-}
-.badge[data-tone="warn"] {
-  color: var(--warn);
-  border-color: rgb(255 180 84 / 0.34);
-  background: rgb(255 180 84 / 0.11);
-}
-.badge[data-tone="bad"] {
-  color: var(--bad);
-  border-color: rgb(255 107 122 / 0.34);
-  background: rgb(255 107 122 / 0.11);
-}
-.badge[data-tone="idle"] {
-  color: var(--idle);
-  border-color: rgb(137 147 168 / 0.3);
-  background: rgb(137 147 168 / 0.08);
-}
+.live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--t2); }
 
-.dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: currentColor;
-  flex: 0 0 auto;
-  box-shadow: 0 0 10px currentColor;
+.alert {
+  padding: var(--sp-3);
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  /* The colour is on a left rail, so the message stays readable and the
+     meaning is still carried by position + text, not hue alone. */
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--t3);
+  background: var(--s1);
 }
+.alert--error { border-left-color: var(--bad); }
+.alert--ok    { border-left-color: var(--ok); }
+.alert--info  { border-left-color: var(--accent); }
 
-.live {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  color: var(--text-faint);
-}
-
-.live[data-connected="true"] {
-  color: var(--ok);
-}
-
-.live[data-connected="true"] .dot {
-  animation: pulse 2.4s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
+.empty { padding: var(--sp-6); text-align: center; color: var(--t2); font-size: 13px; }
 
 /* ─── PC map ───────────────────────────────────────────────────────────────── */
 
-.pc-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(auto-fill, minmax(146px, 1fr));
-}
+.pc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-2); }
 
-/*
- * A seat. The status colour is a glow along the left edge rather than a fill,
- * so eight of them side by side read as a room and not a paint chart.
- */
 .pc {
-  position: relative;
-  background: var(--glass-1);
-  backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
-  border: 1px solid var(--glass-edge);
-  border-radius: var(--radius);
-  box-shadow: var(--lift);
-  padding: 13px 15px;
+  display: grid;
+  gap: var(--sp-2);
+  padding: var(--sp-3);
+  background: var(--s1);
+  border: 1px solid var(--line);
+  /* Status lives on the top edge. Scanning a wall of PCs is a glance along a
+     row of colours, not a hunt for a word inside each tile. */
+  border-top: 2px solid var(--idle);
+  border-radius: var(--r-md);
   cursor: pointer;
   text-align: left;
-  min-height: 104px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  align-items: stretch;
-  justify-content: flex-start;
-  overflow: hidden;
-  transition: transform 180ms var(--ease), border-color 180ms var(--ease),
-    box-shadow 180ms var(--ease);
+  font: inherit;
+  color: inherit;
+  transition: background 120ms ease;
 }
+.pc:hover { background: var(--s2); }
+.pc[data-status="AVAILABLE"]   { border-top-color: var(--ok); }
+.pc[data-status="OCCUPIED"]    { border-top-color: var(--accent); }
+.pc[data-status="MAINTENANCE"] { border-top-color: var(--warn); }
+.pc[data-status="OFFLINE"]     { border-top-color: var(--bad); }
+.pc[data-selected="true"]      { background: var(--s2); border-color: var(--accent); }
 
-.pc::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 12px;
-  bottom: 12px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: var(--idle);
-  box-shadow: 0 0 16px 1px currentColor;
-}
-
-.pc[data-tone="ok"]::before { background: var(--ok); color: rgb(61 220 151 / 0.5); }
-.pc[data-tone="busy"]::before { background: var(--busy); color: rgb(79 140 255 / 0.5); }
-.pc[data-tone="warn"]::before { background: var(--warn); color: rgb(255 180 84 / 0.5); }
-.pc[data-tone="bad"]::before { background: var(--bad); color: rgb(255 107 122 / 0.5); }
-.pc[data-tone="idle"]::before { background: var(--idle); color: rgb(137 147 168 / 0.35); }
-
-.pc:hover {
-  transform: translateY(-2px);
-  border-color: var(--glass-edge-bright);
-}
-
-.pc:active {
-  transform: translateY(0);
-  box-shadow: var(--press);
-}
-
-.pc[data-selected="true"] {
-  border-color: rgb(51 225 196 / 0.6);
-  box-shadow: var(--lift), 0 0 0 1px rgb(51 225 196 / 0.4);
-}
-
-.pc__number {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: 0.6px;
-}
-
-.pc__meta {
-  font-size: 11px;
-  color: var(--text-dim);
-  text-transform: lowercase;
-}
-
-.pc__timer {
-  font-variant-numeric: tabular-nums;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text);
-  margin-top: auto;
-}
-
-/* ─── Feedback ─────────────────────────────────────────────────────────────── */
-
-.alert {
-  border-radius: var(--radius-sm);
-  padding: 12px 15px;
-  font-size: 13px;
-  margin-bottom: 14px;
-  border: 1px solid;
-  backdrop-filter: var(--blur-sm);
-  -webkit-backdrop-filter: var(--blur-sm);
-}
-
-.alert--error {
-  color: var(--bad);
-  border-color: rgb(255 107 122 / 0.34);
-  background: rgb(255 107 122 / 0.09);
-}
-
-.alert--ok {
-  color: var(--ok);
-  border-color: rgb(61 220 151 / 0.34);
-  background: rgb(61 220 151 / 0.09);
-}
-
-.alert--info {
-  color: var(--text-dim);
-  border-color: var(--glass-edge);
-  background: var(--glass-1);
-}
-
-.empty {
-  text-align: center;
-  padding: 38px 18px;
-  color: var(--text-faint);
-  font-size: 13px;
-}
-
-.skeleton {
-  background: linear-gradient(
-    90deg,
-    var(--glass-1) 25%,
-    var(--glass-3) 50%,
-    var(--glass-1) 75%
-  );
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: var(--radius-xs);
-  height: 16px;
-}
-
-@keyframes shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
+.pc__number { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+.pc__meta   { font-size: 11px; color: var(--t2); }
+.pc__timer  { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 13px; color: var(--t1); }
 
 /* ─── Login ────────────────────────────────────────────────────────────────── */
 
-.login {
-  min-height: 100dvh;
-  display: grid;
-  place-items: center;
-  padding: 24px;
+.login { min-height: 100dvh; display: grid; place-items: center; padding: var(--sp-4); }
+.login__card { width: 100%; max-width: 360px; background: var(--s1); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-5); }
+.login__brand { font-size: 18px; font-weight: 600; letter-spacing: 0.22em; color: var(--t1); }
+.login__sub { margin: var(--sp-1) 0 var(--sp-5); color: var(--t2); font-size: 13px; }
+
+/* ─── Bits ─────────────────────────────────────────────────────────────────── */
+
+.row { display: flex; align-items: center; gap: var(--sp-3); }
+.row--wrap { flex-wrap: wrap; }
+.spacer { margin-left: auto; }
+.right { text-align: right; }
+
+.skeleton {
+  height: 14px;
+  border-radius: var(--r-sm);
+  background: var(--s2);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t2);
+  border-bottom: 1px solid var(--line);
+}
+td { padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--line); }
+tr:last-child td { border-bottom: 0; }
+
+@media (max-width: 860px) {
+  .shell { grid-template-columns: 1fr; }
+  .nav {
+    position: static;
+    height: auto;
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .nav__item { border-left: 0; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .nav__item[data-active="true"] { border-left-color: transparent; border-bottom-color: var(--accent); }
+  .main { padding: var(--sp-4); }
 }
 
-.login__card {
-  width: 100%;
-  max-width: 382px;
-  background: var(--glass-2);
-  backdrop-filter: var(--blur);
-  -webkit-backdrop-filter: var(--blur);
-  border: 1px solid var(--glass-edge);
-  border-radius: 24px;
-  padding: 32px 28px;
-  box-shadow: var(--lift), 0 40px 80px -24px rgb(0 0 0 / 0.7);
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
 
-.login__brand {
-  font-family: var(--font-display);
-  font-size: 30px;
-  letter-spacing: 7px;
-  background: linear-gradient(100deg, var(--mint), var(--accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  margin-bottom: 4px;
-}
+/* ─── Top bar ──────────────────────────────────────────────────────────────── */
 
-.login__sub {
-  color: var(--text-dim);
-  font-size: 13px;
-  margin-bottom: 26px;
-}
+.shell__body { display: flex; flex-direction: column; min-width: 0; }
 
-/* ─── Utility ──────────────────────────────────────────────────────────────── */
-
-.row {
+.topbar {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: var(--sp-3);
+  height: 48px;
+  padding: 0 var(--sp-6);
+  background: var(--s1);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
-
-.row--wrap {
-  flex-wrap: wrap;
+.topbar__brand { font-size: 13px; font-weight: 700; letter-spacing: 0.22em; }
+.topbar__zone {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--t2);
+  padding-left: var(--sp-3);
+  border-left: 1px solid var(--line);
 }
+.topbar__right { margin-left: auto; display: flex; align-items: center; gap: var(--sp-3); }
 
-.spacer {
-  margin-left: auto;
+/* ─── Stat tiles ───────────────────────────────────────────────────────────── */
+
+.stat {
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
 }
-
-.dim { color: var(--text-dim); }
-.faint { color: var(--text-faint); }
-.small { font-size: 12px; }
-
-.stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap);
+.stat__label {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--t2);
 }
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+.stat__value {
+  margin-top: var(--sp-1);
+  /* The number is the point of the tile, so it gets the size and the mono
+     figures — a column of these should line up and not jitter as they tick. */
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
+.stat__note { margin-top: var(--sp-1); font-size: 11px; color: var(--t3); }
 
-/*
- * Reduced motion. The glass and the depth stay — they carry meaning — but
- * nothing moves on its own.
- */
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.001ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.001ms !important;
-  }
-}
+/* ─── Badge tones ──────────────────────────────────────────────────────────── */
 
-/*
- * Backdrop-filter is well supported but not universal. Without it, translucent
- * panels sit directly on the ambient gradient and the text on them loses its
- * background — so the fallback drops the transparency rather than the words.
- */
-@supports not (backdrop-filter: blur(1px)) {
-  .card,
-  .stat,
-  .pc,
-  .login__card,
-  .topbar,
-  .nav {
-    background: #161b2e;
-  }
-}
+/* The tone sets the dot, not the whole tag. A wall of coloured blocks is
+   harder to scan than grey tags with one coloured mark each. */
+.badge[data-tone="ok"]    .dot { background: var(--ok); }
+.badge[data-tone="busy"]  .dot { background: var(--accent); }
+.badge[data-tone="warn"]  .dot { background: var(--warn); }
+.badge[data-tone="bad"]   .dot { background: var(--bad); }
+.badge[data-tone="idle"]  .dot { background: var(--idle); }
+.badge[data-tone="ok"]    { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 30%, var(--line)); }
+.badge[data-tone="busy"]  { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+.badge[data-tone="warn"]  { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 30%, var(--line)); }
+.badge[data-tone="bad"]   { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 30%, var(--line)); }
+
+/* ─── Bits ─────────────────────────────────────────────────────────────────── */
+
+.stack { display: grid; gap: var(--sp-3); }
+.table-wrap { overflow-x: auto; }

@@ -1,31 +1,30 @@
 import type { Metadata, Viewport } from "next";
-import { Chakra_Petch, Russo_One } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 
 import "./globals.css";
 import { SessionProvider } from "@/lib/session";
 import { Shell } from "@/components/Shell";
 
 /*
- * Self-hosted at build time rather than fetched from Google: no runtime
- * request, no flash of unstyled text, and a zone on a flaky connection still
- * gets its own typeface.
+ * Self-hosted at build time: no runtime request, no flash of unstyled text,
+ * and a zone on a flaky connection still gets its own typeface.
  *
- * Chakra Petch carries the interface — squared-off and technical without
- * costing legibility in a dense table. Russo One is display only: the brand,
- * headings and the big numbers. It is a loud face and a cashier reads this
- * screen all shift, so it never touches body copy.
+ * Inter carries the interface — it was drawn for screens at small sizes, which
+ * is most of what a console is. JetBrains Mono is for numbers only: timers,
+ * money, PC codes. Its figures are tabular, so a running clock does not shift
+ * sideways as the digits change, and a column of prices lines up on its own.
  */
-const ui = Chakra_Petch({
+const ui = Inter({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "500", "600", "700"],
   variable: "--font-ui",
   display: "swap",
 });
 
-const display = Russo_One({
+const mono = JetBrains_Mono({
   subsets: ["latin"],
-  weight: "400",
-  variable: "--font-display",
+  weight: ["400", "500"],
+  variable: "--font-mono",
   display: "swap",
 });
 
@@ -39,12 +38,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   // The console is used one-handed on a counter; let staff zoom if they need to.
   maximumScale: 5,
-  themeColor: "#080a12",
+  themeColor: "#0a0b0d",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${ui.variable} ${display.variable}`}>
+    <html lang="en" className={`${ui.variable} ${mono.variable}`}>
       <body>
         <SessionProvider>
           <Shell>{children}</Shell>

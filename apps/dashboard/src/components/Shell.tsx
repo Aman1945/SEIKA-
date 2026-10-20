@@ -6,25 +6,29 @@ import { usePathname } from "next/navigation";
 import { useSession, type Capability } from "@/lib/session";
 import { useZoneStream } from "@/lib/realtime";
 import { Login } from "@/components/Login";
+import {
+  IconBox, IconClock, IconCup, IconFlag, IconGrid,
+  IconImport, IconList, IconTrend, IconUsers,
+} from "@/components/icons";
 
 interface NavItem {
   href: string;
   label: string;
-  icon: string;
+  icon: React.ComponentType<{ className?: string }>;
   /** Hidden unless the role has this. Presentation only — the API decides. */
   needs?: Capability;
 }
 
 const NAV: NavItem[] = [
-  { href: "/", label: "Live", icon: "▦" },
-  { href: "/orders", label: "Orders", icon: "☕", needs: "orders:manage" },
-  { href: "/sessions", label: "Sessions", icon: "⏱" },
-  { href: "/analytics", label: "Revenue", icon: "₹", needs: "analytics" },
-  { href: "/shop", label: "Shop", icon: "▤", needs: "products:manage" },
-  { href: "/events", label: "Events", icon: "⚑", needs: "events:manage" },
-  { href: "/staff", label: "Staff", icon: "☷", needs: "staff:manage" },
-  { href: "/audit", label: "Audit", icon: "⎘", needs: "audit:view" },
-  { href: "/migration", label: "Import", icon: "⇪", needs: "migration" },
+  { href: "/", label: "Live", icon: IconGrid },
+  { href: "/orders", label: "Orders", icon: IconCup, needs: "orders:manage" },
+  { href: "/sessions", label: "Sessions", icon: IconClock },
+  { href: "/analytics", label: "Revenue", icon: IconTrend, needs: "analytics" },
+  { href: "/shop", label: "Shop", icon: IconBox, needs: "products:manage" },
+  { href: "/events", label: "Events", icon: IconFlag, needs: "events:manage" },
+  { href: "/staff", label: "Staff", icon: IconUsers, needs: "staff:manage" },
+  { href: "/audit", label: "Audit", icon: IconList, needs: "audit:view" },
+  { href: "/migration", label: "Import", icon: IconImport, needs: "migration" },
 ];
 
 export function Shell({ children }: { children: React.ReactNode }) {
@@ -59,8 +63,8 @@ export function Shell({ children }: { children: React.ReactNode }) {
           const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           return (
             <Link key={item.href} href={item.href} className="nav__item" data-active={active}>
-              <span className="nav__icon" aria-hidden="true">
-                {item.icon}
+              <span className="nav__icon">
+                <item.icon />
               </span>
               <span>{item.label}</span>
             </Link>
@@ -83,7 +87,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
               <span className="dot" />
               {stream.connected ? "Live" : "Offline"}
             </span>
-            <button className="btn--sm" onClick={() => void logout()}>
+            <button className="btn btn--sm" onClick={() => void logout()}>
               Sign out
             </button>
           </div>

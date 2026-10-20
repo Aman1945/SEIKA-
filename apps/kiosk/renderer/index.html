@@ -1,504 +1,349 @@
 <meta charset="utf-8" />
 <title>SEIKA</title>
 <style>
-  /*
-   * The lock screen. Read from across a room by someone deciding whether to
-   * sit down, so: one instruction, one code, and the machine's state — nothing
-   * else competing for attention.
-   */
-  :root {
-    --bg: #0a0b1a;
-    --raised: rgb(255 255 255 / 0.07);
-    --border: rgb(255 255 255 / 0.14);
-    --edge: rgb(255 255 255 / 0.3);
-    --text: #f4f6fc;
-    --dim: #aab4cc;
-    --faint: #7c879c;
-    --accent: #33e1c4;
-    --violet: #8b6cff;
-    --bad: #ff6b7a;
-    --warn: #ffb454;
-    --blur: blur(26px) saturate(170%);
-  }
+/* ─── SEIKA design tokens ────────────────────────────────────────────────────
+ *
+ * Swiss grid, dark. One accent. Flat surfaces with real steps, hairline
+ * borders, square geometry.
+ *
+ * No glass, no gradient text, no pills. Those read as decoration, and a
+ * console someone stares at for a whole shift should be structure and
+ * typography — the screen's job is to be read quickly, not admired.
+ *
+ * Keep this block identical in:
+ *   apps/dashboard/src/app/globals.css
+ *   apps/player/src/app/globals.css
+ *   apps/kiosk/renderer/index.html
+ */
+:root {
+  /* Surfaces are real steps, not transparency. Each is a distinct plane, so
+     depth survives a bright room and a cheap monitor. */
+  --s0: #0a0b0d;
+  --s1: #101216;
+  --s2: #171a1f;
+  --s3: #1f232a;
 
-  * { box-sizing: border-box; }
+  /* Hairlines separate things. Shadows used to, and they blurred the grid. */
+  --line: #262b33;
+  --line-strong: #39414d;
 
-  /*
-   * The ambient room this screen lives in. A lock screen is on display for
-   * hours at a time in a dim venue, so it is built to be looked at: the glow
-   * carries the brand, and the QR stays the one bright thing on it.
-   */
-  body {
-    margin: 0;
-    min-height: 100vh;
-    background-color: var(--bg);
-    background-image:
-      radial-gradient(48rem 40rem at 50% -14%, rgb(139 108 255 / 0.5), transparent 62%),
-      radial-gradient(38rem 32rem at 8% 88%, rgb(51 225 196 / 0.26), transparent 60%),
-      radial-gradient(36rem 30rem at 94% 80%, rgb(255 94 164 / 0.22), transparent 60%);
-    color: var(--text);
-    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    /* The pairing code made this column taller than a laptop screen, and with
-       overflow hidden the bottom simply vanished while the fixed status pill
-       sat on top of the code. Give the pill its own room and let the gap
-       close up when there is not much height to spend. */
-    gap: clamp(12px, 2.4vh, 28px);
-    padding: 20px 20px calc(24px + 52px);
-    box-sizing: border-box;
-    /* Nothing on this screen is meant to be selected or dragged away. */
-    user-select: none;
-    -webkit-user-select: none;
-    cursor: default;
-    overflow: hidden;
-  }
+  --t1: #e8eaed;
+  --t2: #99a1ad;
+  --t3: #6b7380;
 
-  .brand {
-    font-size: 54px;
-    font-weight: 800;
-    letter-spacing: 14px;
-    background: linear-gradient(100deg, var(--accent), var(--violet));
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    filter: drop-shadow(0 0 28px rgb(124 92 255 / 0.4));
-  }
+  /* One accent. If something is this colour it can be pressed; if it can be
+     pressed it is this colour. That rule is the whole system. */
+  --accent: #4d7cfe;
+  --accent-ink: #ffffff;
+  --accent-weak: #16213f;
 
-  .pc {
-    font-size: 15px;
-    color: var(--dim);
-    margin-top: -22px;
-  }
+  /* Status sits outside the accent, except OCCUPIED — a PC in use is the
+     active state, and reading it as the accent is correct rather than a clash. */
+  --ok: #3fb950;
+  --warn: #d29922;
+  --bad: #f85149;
+  --idle: #6b7380;
 
-  /*
-   * The QR sits on white inside a glass frame. The code itself must stay high
-   * contrast — a phone camera reading it across a room is the whole job, and
-   * no amount of style is worth a scan that fails.
-   */
-  .qr-card {
-    position: relative;
-    background: #fff;
-    border-radius: 26px;
-    width: min(332px, 38vh, 72vw);
-    height: min(332px, 38vh, 72vw);
-    padding: clamp(10px, 1.6vh, 20px);
-    display: grid;
-    place-items: center;
-    box-shadow:
-      0 0 0 10px rgb(255 255 255 / 0.05),
-      0 0 0 11px rgb(255 255 255 / 0.12),
-      0 30px 70px -20px rgb(0 0 0 / 0.75),
-      0 0 90px -18px rgb(124 92 255 / 0.5);
-  }
+  /* Square enough to read as a control surface. */
+  --r-sm: 2px;
+  --r-md: 4px;
+  --r-lg: 6px;
 
-  .qr-card img { width: 100%; height: 100%; display: block; }
+  /* 8px rhythm, dense end — this is a dashboard, not a landing page. */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px; --sp-4: 16px;
+  --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
 
-  .qr-placeholder { color: #64708a; font-size: 14px; text-align: center; padding: 20px; }
+  --font: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  /* Tabular figures everywhere a number can change: timers, money, counts.
+     Proportional digits make a running clock jitter sideways. */
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
 
-  .instruction {
-    font-size: 23px;
-    font-weight: 600;
-    text-align: center;
-    letter-spacing: 0.3px;
-  }
+* { box-sizing: border-box; }
 
-  .sub {
-    font-size: 15px;
-    color: var(--dim);
-    text-align: center;
-    max-width: 420px;
-    line-height: 1.55;
-  }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--s0);
+  color: var(--t1);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2vh, 20px);
+  padding: 20px 20px 76px;
+  /* Nothing on a lock screen is meant to be selected or dragged away. */
+  user-select: none;
+  -webkit-user-select: none;
+  cursor: default;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
 
-  /*
-   * The machine's own state, bottom centre where staff look for it. Glass, so
-   * it reads as part of the surface rather than text floating on a gradient.
-   */
-  .status {
-    position: fixed;
-    bottom: 24px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    font-size: 12px;
-    color: var(--faint);
-    padding: 10px 20px;
-    border-radius: 999px;
-    background: var(--raised);
-    border: 1px solid var(--border);
-    backdrop-filter: var(--blur);
-    -webkit-backdrop-filter: var(--blur);
-    box-shadow: 0 1px 0 0 var(--edge) inset, 0 10px 30px -12px rgb(0 0 0 / 0.7);
-  }
+/* ─── Lock screen ──────────────────────────────────────────────────────────── */
 
-  .pill { display: flex; align-items: center; gap: 7px; }
+.brand {
+  font-size: clamp(22px, 3.4vh, 30px);
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  /* Flat, not a gradient. A gradient on a wordmark is the first thing that
+     makes a screen look generated rather than designed. */
+  color: var(--t1);
+}
 
-  .dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--bad);
-    box-shadow: 0 0 10px currentColor;
-  }
+.pc {
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--t2);
+}
 
-  .dot[data-ok="true"] {
-    background: var(--accent);
-    box-shadow: 0 0 12px rgb(51 225 196 / 0.8);
-  }
+.qr-card {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(320px, 36vh, 70vw);
+  height: min(320px, 36vh, 70vw);
+  padding: clamp(10px, 1.6vh, 18px);
+  background: #fff;
+  /* A hairline, not a glow. The white square already separates itself from a
+     near-black page; anything more is decoration. */
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+}
+.qr-card img { width: 100%; height: 100%; display: block; }
+.qr-placeholder { color: #6b7380; font-size: 13px; text-align: center; padding: 16px; }
 
-  .banner {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    padding: 13px;
-    text-align: center;
-    font-size: 15px;
-    font-weight: 600;
-    display: none;
-  }
+.instruction { font-size: clamp(15px, 2.2vh, 19px); font-weight: 600; letter-spacing: -0.01em; }
+.sub { max-width: 46ch; text-align: center; font-size: 13px; color: var(--t2); }
 
-  .banner[data-kind="fatal"] {
-    display: block;
-    background: rgb(255 107 122 / 0.16);
-    border-bottom: 1px solid rgb(255 107 122 / 0.34);
-    color: var(--bad);
-    backdrop-filter: var(--blur);
-    -webkit-backdrop-filter: var(--blur);
-  }
+/* ─── Typed code ───────────────────────────────────────────────────────────── */
 
-  .banner[data-kind="notice"] {
-    display: block;
-    background: rgb(255 180 84 / 0.15);
-    border-bottom: 1px solid rgb(255 180 84 / 0.32);
-    color: var(--warn);
-    backdrop-filter: var(--blur);
-    -webkit-backdrop-filter: var(--blur);
-  }
+.paircode { text-align: center; }
+.paircode__label {
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t3);
+}
+.paircode__digits {
+  margin-top: 4px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(24px, 4.2vh, 38px);
+  font-weight: 500;
+  /* Wide tracking: this is read off a screen from a metre away and typed on a
+     phone, so the digits need air between them. */
+  letter-spacing: 0.16em;
+  color: var(--t1);
+}
 
-  .unlocked {
-    display: none;
-    text-align: center;
-  }
+/* ─── Status ───────────────────────────────────────────────────────────────── */
 
-  @media (prefers-reduced-motion: reduce) {
-    * { animation: none !important; transition: none !important; }
-  }
+.status {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 7px 14px;
+  font-size: 11px;
+  color: var(--t2);
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.pill { display: flex; align-items: center; gap: 6px; }
+.dot { width: 6px; height: 6px; border-radius: 1px; background: var(--bad); }
+.dot[data-ok="true"] { background: var(--ok); }
 
-  /* contents, so its children lay out as if this wrapper were not here —
-     but as a rule, not an inline style, or the hide below cannot win. */
-  .locked-view { display: contents; }
-  body[data-locked="false"] .locked-view { display: none; }
-  /* The pill is lock-screen reporting: connection, heartbeat, how old the
-     code is. None of that applies once the player is in, and it was landing
-     on top of the dashboard's own navigation. */
-  body[data-locked="false"] .status { display: none; }
+.banner {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  padding: 10px 16px;
+  text-align: center;
+  font-size: 13px;
+  background: var(--s2);
+  border-bottom: 2px solid var(--warn);
+}
+.banner:empty { display: none; }
+.banner[data-kind="fatal"] { border-bottom-color: var(--bad); }
 
-  /* ─── Recovery ──────────────────────────────────────────────────────────
-     Shown only when this PC has no usable config. Deliberately plain and
-     obvious: it is the way out for someone standing at a machine that will
-     not otherwise let them go. */
-  .exit-btn {
-    display: block;
-    margin: 1.4rem auto 0;
-    padding: 0.85rem 2rem;
-    font: inherit;
-    font-size: 1rem;
-    font-weight: 600;
-    color: #06111a;
-    background: linear-gradient(180deg, #7fe3c4, #4cc3a4);
-    border: 0;
-    border-radius: 999px;
-    cursor: pointer;
-    box-shadow: var(--lift, 0 10px 30px rgb(0 0 0 / 0.35));
-  }
-  .exit-btn:hover:not(:disabled) { filter: brightness(1.08); }
-  .exit-btn:active:not(:disabled) { transform: translateY(1px); }
-  .exit-btn:disabled { opacity: 0.6; cursor: default; }
-  .exit-details {
-    margin: 1rem auto 0;
-    max-width: 42rem;
-    font-size: 0.8rem;
-    opacity: 0.65;
-    text-align: left;
-  }
-  .exit-details summary { cursor: pointer; text-align: center; }
-  .exit-details pre {
-    white-space: pre-wrap;
-    word-break: break-word;
-    margin-top: 0.6rem;
-    line-height: 1.5;
-  }
+/* ─── Launcher ─────────────────────────────────────────────────────────────── */
 
-  /* ─── Typed pairing code ────────────────────────────────────────────────
-     The way in for a player who cannot scan: cracked camera, no permission,
-     or a screen too dirty to read optically. */
-  .paircode {
-    margin-top: 0;
-    text-align: center;
-  }
-  .paircode__label {
-    font-size: 0.78rem;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    opacity: 0.55;
-  }
-  .paircode__digits {
-    margin-top: 0.35rem;
-    font-family: var(--font-display, inherit);
-    font-size: clamp(1.4rem, 3.6vh, 2.4rem);
-    letter-spacing: 0.12em;
-    font-variant-numeric: tabular-nums;
-    color: #eaf2ff;
-    text-shadow: 0 0 24px rgb(var(--glow-1) / 0.45);
-  }
+.locked-view { display: contents; }
+body[data-locked="false"] .locked-view { display: none; }
+body[data-locked="false"] .status { display: none; }
 
-  /* ─── Launcher ──────────────────────────────────────────────────────────
-     What the player sees once the PC is theirs. Not a lock: it gives up
-     focus and can be minimised, because the game they just started has to
-     come to the front. */
-  .lx-top {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1.6rem 2.2rem;
-  }
-  .lx-brand {
-    font-family: var(--font-display, inherit);
-    font-size: 1.5rem;
-    letter-spacing: 0.3em;
-    background: linear-gradient(90deg, #7fe3c4, #7aa7ff, #a78bfa);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-  }
-  .lx-clock { text-align: right; }
-  .lx-clock__value {
-    font-family: var(--font-display, inherit);
-    font-size: clamp(1.8rem, 4vw, 2.8rem);
-    font-variant-numeric: tabular-nums;
-    line-height: 1;
-  }
-  .lx-clock__label {
-    font-size: 0.72rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    opacity: 0.55;
-    margin-top: 0.3rem;
-  }
-  /* Under five minutes the clock stops being decoration. */
-  .lx-clock--low .lx-clock__value { color: #ffb4a2; }
+.unlocked { display: none; width: 100%; height: 100dvh; flex-direction: column; }
+body[data-locked="false"] .unlocked { display: flex; }
+body[data-locked="false"] { justify-content: flex-start; padding: 0; gap: 0; overflow: hidden; }
 
-  .lx-main { padding: 0 2.2rem 2.2rem; }
-  .lx-heading {
-    margin: 0 0 0.6rem;
-    font-size: 0.78rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    opacity: 0.6;
-    margin: 0 0 1rem;
-  }
-  .lx-games {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-    gap: 1rem;
-  }
-  .lx-game {
-    padding: 1.4rem 1.1rem;
-    border-radius: 16px;
-    background: var(--glass-1);
-    border: 1px solid rgb(255 255 255 / 0.08);
-    backdrop-filter: blur(14px);
-    text-align: left;
-    font: inherit;
-    font-size: 1rem;
-    color: inherit;
-    cursor: pointer;
-    box-shadow: var(--lift);
-  }
-  .lx-game:hover:not(:disabled) { border-color: rgb(var(--glow-1) / 0.5); }
-  .lx-game:active:not(:disabled) { box-shadow: var(--press); }
-  .lx-game:disabled { opacity: 0.4; cursor: not-allowed; }
-  .lx-game__name { font-weight: 600; }
-  .lx-game__state {
-    display: block;
-    margin-top: 0.3rem;
-    font-size: 0.78rem;
-    opacity: 0.6;
-  }
-  .lx-note { margin: 0.7rem 0 0; font-size: 0.85rem; opacity: 0.7; }
-  .lx-note:empty { display: none; }
+.lx-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px clamp(16px, 2.4vw, 32px);
+  border-bottom: 1px solid var(--line);
+}
+.lx-brand { font-size: 15px; font-weight: 700; letter-spacing: 0.26em; color: var(--t1); }
 
-  /* ─── Launcher layout ───────────────────────────────────────────────────
-     Two columns on a desktop, stacked on anything narrow. The dashboard is
-     the same player app the phone shows, so there is one of it, not two. */
-  .lx-main {
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    gap: clamp(0.8rem, 2vh, 1.4rem);
-    padding: 0 clamp(1rem, 2.5vw, 2.2rem) clamp(1rem, 2.5vh, 1.6rem);
-    min-height: 0;
-  }
-  /* The games strip is as tall as its tiles; everything left goes to the
-     dashboard. Without this the strip grew and pushed the dashboard off the
-     bottom of the screen. */
-  .lx-col { min-width: 0; flex: 0 0 auto; }
-  .lx-col--dash { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .lx-col--dash .lx-dash { flex: 1; }
-  .lx-dash {
-    /* Whatever is left after the header and the games strip. The player app
-       is responsive now, so giving it the width is what makes it stop
-       looking like a phone. */
-    flex: 1;
-    min-height: clamp(380px, 56vh, 900px);
-    border-radius: 18px;
-    overflow: hidden;
-    background: var(--glass-1);
-    border: 1px solid rgb(255 255 255 / 0.08);
-    box-shadow: var(--lift);
-    position: relative;
-  }
-  /* Absolute rather than height:100%. A <webview> is replaced content, so a
-     percentage height falls back to its intrinsic 150px and the guest page
-     lays out in a 150px-tall viewport inside a 610px panel — the nav lands a
-     third of the way down and the rest is blank. Pinning all four edges gives
-     it a definite size. */
-  .lx-dash webview, .lx-dash iframe {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border: 0;
-    display: flex;
-  }
-  .lx-dash__msg {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    padding: 1.4rem;
-    text-align: center;
-    font-size: 0.9rem;
-    opacity: 0.7;
-  }
+.lx-clock { text-align: right; }
+.lx-clock__value {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(22px, 4vh, 34px);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.lx-clock__label { margin-top: 3px; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--t2); }
+/* Under five minutes the clock stops being decoration. */
+.lx-clock--low .lx-clock__value { color: var(--warn); }
 
-  /* Stack once two columns stop being readable, and on a short screen give
-     the dashboard less height so the games stay reachable without scrolling
-     past them. */
-  /* The games strip scrolls sideways rather than growing a second row and
-     pushing the dashboard off a short screen. */
-  .lx-games {
-    display: flex;
-    gap: 0.8rem;
-    overflow-x: auto;
-    padding-bottom: 0.3rem;
-    scrollbar-width: thin;
-  }
-  .lx-game { flex: 0 0 auto; min-width: 170px; padding: 0.9rem 1.1rem; }
-  @media (max-height: 760px) {
-    .lx-dash { min-height: 46vh; }
-    .lx-game { padding: 0.7rem 1rem; min-width: 150px; }
-  }
-  .unlocked {
-    display: none;
-    width: 100%;
-    height: 100dvh;
-    flex-direction: column;
-  }
-  body[data-locked="false"] .unlocked { display: flex; }
-  /* The launcher owns the viewport; only the dashboard inside it scrolls. */
-  body[data-locked="false"] {
-    justify-content: flex-start;
-    padding: 0;
-    gap: 0;
-    overflow: hidden;
-  }
-  .lx-top { padding: clamp(0.8rem, 2vh, 1.4rem) clamp(1rem, 2.5vw, 2.2rem); }
+.lx-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px clamp(16px, 2.4vw, 32px) 20px;
+  min-height: 0;
+  overflow-y: auto;
+}
+.lx-col { min-width: 0; flex: 0 0 auto; }
+.lx-col--dash { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.lx-col--dash .lx-dash { flex: 1; }
 
-  /* ─── Staff panel ───────────────────────────────────────────────────────
-     Only a way to add games. It is in the launcher because that is where
-     staff are standing when they notice a game is missing. */
-  .lx-staff-open {
-    margin-top: 0.8rem;
-    padding: 0.55rem 1rem;
-    font: inherit;
-    font-size: 0.82rem;
-    color: inherit;
-    opacity: 0.65;
-    background: transparent;
-    border: 1px solid rgb(255 255 255 / 0.14);
-    border-radius: 999px;
-    cursor: pointer;
-  }
-  .lx-staff-open:hover { opacity: 1; }
-  .lx-staff {
-    position: fixed;
-    inset: 0;
-    z-index: 40;
-    margin: auto;
-    width: min(560px, calc(100vw - 2rem));
-    height: fit-content;
-    max-height: calc(100vh - 3rem);
-    overflow-y: auto;
-    padding: 1.4rem;
-    border-radius: 18px;
-    background: #121426;
-    border: 1px solid rgb(255 255 255 / 0.12);
-    box-shadow: 0 40px 120px -30px rgb(0 0 0 / 0.9);
-  }
-  .lx-staff[hidden] { display: none; }
-  .lx-staff__close {
-    float: right;
-    margin: -0.4rem -0.4rem 0 0;
-    width: 32px; height: 32px;
-    font: inherit; font-size: 1.1rem; line-height: 1;
-    color: inherit; cursor: pointer;
-    background: transparent;
-    border: 1px solid rgb(255 255 255 / 0.14);
-    border-radius: 50%;
-  }
-  .lx-field { margin: 0.8rem 0; }
-  .lx-field label {
-    display: block;
-    font-size: 0.72rem;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    opacity: 0.55;
-    margin-bottom: 0.35rem;
-  }
-  .lx-field input {
-    width: 100%;
-    box-sizing: border-box;
-    padding: 0.6rem 0.8rem;
-    font: inherit;
-    color: inherit;
-    background: rgb(0 0 0 / 0.3);
-    border: 1px solid rgb(255 255 255 / 0.12);
-    border-radius: 10px;
-  }
-  .lx-row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; margin-top: 0.6rem; }
-  .lx-btn {
-    padding: 0.55rem 1.1rem;
-    font: inherit;
-    font-size: 0.9rem;
-    color: inherit;
-    background: rgb(255 255 255 / 0.08);
-    border: 1px solid rgb(255 255 255 / 0.14);
-    border-radius: 999px;
-    cursor: pointer;
-  }
-  .lx-btn--primary { background: linear-gradient(180deg, #7fe3c4, #4cc3a4); color: #06111a; border: 0; font-weight: 600; }
-  .lx-btn:disabled { opacity: 0.5; cursor: default; }
-  .lx-sflist { display: grid; gap: 0.4rem; margin-bottom: 0.8rem; }
-  .lx-sfrow { display: flex; align-items: center; gap: 0.6rem; font-size: 0.85rem; }
-  .lx-sfrow code { opacity: 0.6; font-size: 0.78rem; word-break: break-all; }
-  .lx-sfrow button { margin-left: auto; }
+.lx-heading {
+  margin: 0 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--t2);
+}
+
+/* The games strip scrolls sideways rather than growing a second row and
+   pushing the dashboard off a short screen. */
+.lx-games { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.lx-game {
+  flex: 0 0 auto;
+  min-width: 164px;
+  padding: 12px 14px;
+  text-align: left;
+  font: inherit; font-size: 14px; color: inherit;
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.lx-game:hover:not(:disabled) { background: var(--s2); border-color: var(--line-strong); }
+.lx-game:disabled { opacity: 0.45; cursor: not-allowed; }
+.lx-game__name { font-weight: 600; }
+.lx-game__state { display: block; margin-top: 2px; font-size: 11px; color: var(--t2); }
+
+.lx-note { margin: 8px 0 0; font-size: 12px; color: var(--t2); }
+.lx-note:empty { display: none; }
+
+.lx-dash {
+  position: relative;
+  min-height: clamp(360px, 54vh, 900px);
+  background: var(--s1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+/* Absolute, not height:100%. A <webview> is replaced content, so a percentage
+   height falls back to its intrinsic 150px and the guest page lays out in a
+   150px-tall viewport inside a 600px panel. */
+.lx-dash webview, .lx-dash iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; display: flex; }
+.lx-dash__msg { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; text-align: center; font-size: 13px; color: var(--t2); }
+
+/* ─── Controls ─────────────────────────────────────────────────────────────── */
+
+.lx-btn, .lx-staff-open, .exit-btn {
+  min-height: 36px;
+  padding: 0 16px;
+  font: inherit; font-size: 13px; font-weight: 500;
+  color: var(--t1);
+  background: var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.lx-btn:hover:not(:disabled), .lx-staff-open:hover, .exit-btn:hover:not(:disabled) { background: var(--s3); }
+.lx-btn:disabled, .exit-btn:disabled { opacity: 0.45; cursor: default; }
+.lx-btn--primary, .exit-btn { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.lx-btn--primary:hover:not(:disabled), .exit-btn:hover:not(:disabled) { filter: brightness(1.1); }
+.lx-staff-open { margin-top: 10px; background: transparent; color: var(--t2); }
+.lx-staff-open:hover { color: var(--t1); }
+
+:where(button, input, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.lx-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.lx-field { margin: 12px 0; }
+.lx-field label { display: block; margin-bottom: 5px; font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--t2); }
+.lx-field input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  font: inherit; font-size: 15px; color: var(--t1);
+  background: var(--s0);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+}
+.lx-field input:focus { border-color: var(--accent); outline: none; }
+
+/* ─── Staff overlay ────────────────────────────────────────────────────────── */
+
+.lx-staff {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  margin: auto;
+  width: min(560px, calc(100vw - 32px));
+  height: fit-content;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  padding: 20px;
+  background: var(--s1);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-md);
+}
+.lx-staff[hidden] { display: none; }
+.lx-staff__close {
+  float: right;
+  margin: -4px -4px 0 0;
+  width: 30px; height: 30px;
+  font: inherit; font-size: 17px; line-height: 1;
+  color: var(--t2); cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+.lx-staff__close:hover { color: var(--t1); background: var(--s2); }
+.lx-sflist { display: grid; gap: 1px; margin-bottom: 14px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-sm); overflow: hidden; }
+.lx-sfrow { display: flex; align-items: center; gap: 10px; padding: 9px 11px; background: var(--s1); font-size: 13px; }
+.lx-sfrow code { font-family: var(--mono); font-size: 11px; color: var(--t3); word-break: break-all; }
+.lx-sfrow button { margin-left: auto; }
+
+/* ─── Recovery ─────────────────────────────────────────────────────────────── */
+
+.exit-btn { display: block; margin: 18px auto 0; min-height: 44px; padding: 0 28px; font-size: 15px; font-weight: 600; }
+.exit-details { margin: 14px auto 0; max-width: 46rem; font-size: 12px; color: var(--t3); text-align: left; }
+.exit-details summary { cursor: pointer; text-align: center; }
+.exit-details pre { font-family: var(--mono); white-space: pre-wrap; word-break: break-word; margin-top: 8px; line-height: 1.6; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
 </style>
 
 <div class="banner" id="banner"></div>

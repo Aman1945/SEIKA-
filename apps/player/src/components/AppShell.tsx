@@ -5,13 +5,14 @@ import { usePathname } from "next/navigation";
 
 import { usePlayer } from "@/lib/session";
 import { Login } from "@/components/Login";
+import { IconPassport, IconPlay, IconRanks, IconShop, IconWallet } from "@/components/icons";
 
 const TABS = [
-  { href: "/", label: "Passport", icon: "◈" },
-  { href: "/play", label: "Play", icon: "▶" },
-  { href: "/wallet", label: "Wallet", icon: "₹" },
-  { href: "/shop", label: "Shop", icon: "☕" },
-  { href: "/ranks", label: "Ranks", icon: "♛" },
+  { href: "/", label: "Passport", icon: IconPassport },
+  { href: "/play", label: "Play", icon: IconPlay },
+  { href: "/wallet", label: "Wallet", icon: IconWallet },
+  { href: "/shop", label: "Shop", icon: IconShop },
+  { href: "/ranks", label: "Ranks", icon: IconRanks },
 ];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -40,8 +41,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           const active = tab.href === "/" ? pathname === "/" : pathname.startsWith(tab.href);
           return (
             <Link key={tab.href} href={tab.href} className="tab" data-active={active}>
-              <span className="tab__icon" aria-hidden="true">
-                {tab.icon}
+              <span className="tab__icon">
+                <tab.icon />
               </span>
               <span>{tab.label}</span>
             </Link>
