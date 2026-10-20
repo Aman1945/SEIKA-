@@ -19,7 +19,8 @@ const QRCode = require("qrcode");
 
 const { KioskApi } = require("./src/api");
 const smartsync = require("./src/smartsync");
-const { detectGames } = require("./src/detect");
+const { detectGames, steamRoot } = require("./src/detect");
+const { signOutLaunchers } = require("./src/launchers");
 
 /** How often to tell the server this PC is alive (plan B8). */
 const HEARTBEAT_MS = 20_000;
@@ -700,6 +701,10 @@ function applyLock(next, reason, opts = {}) {
     // Before the screen comes up, not after: the lock screen appearing over a
     // game the player is still in is not a locked PC.
     closeRunningGames(reason || "locked");
+    // The games are closed; now the accounts behind them. A player's Steam
+    // left signed in is the next customer's library, friends list and saved
+    // card — a zone only has to get that wrong once.
+    signOutLaunchers({ steamRoot: steamRoot(), log: logger });
     if (!WINDOWED) win.setKiosk(true);
     win.setAlwaysOnTop(true, "screen-saver");
     win.show();

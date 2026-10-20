@@ -168,4 +168,4 @@ function detectGames() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-module.exports = { detectGames };
+module.exports = { detectGames, steamRoot };
