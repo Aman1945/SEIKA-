@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import mongoose from "mongoose";
 import { Booking } from "../../models/Booking.js";
 import { PC } from "../../models/PC.js";
+import { resolveRate } from "../pricing/pricing.service.js";
 import { badRequest, conflict, forbidden, notFound } from "../../common/errors.js";
 import { withTransaction } from "../../config/db.js";
 import { addWalletEntry, getWalletBalance } from "../wallet/wallet.service.js";
@@ -57,7 +58,10 @@ export async function createBooking(params: {
   const pc = await PC.findById(params.pcId);
   if (!pc) throw notFound("PC not found");
 
-  const rate = parseFloat(pc.hourlyRate.toString());
+  // Priced for when the slot STARTS, not when it is booked — a player
+  // reserving a midnight slot at noon is buying the midnight rate.
+  const priced = await resolveRate(pc, params.slotStart);
+  const rate = priced.rate;
   const minutes = Math.round((params.slotEnd.getTime() - params.slotStart.getTime()) / 60000);
   const amount = +((rate * minutes) / 60).toFixed(2);
 

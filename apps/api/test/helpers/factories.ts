@@ -84,14 +84,14 @@ export async function seedZone(
 /** Extra PC in an existing zone (booking-conflict and PC-map cases need two). */
 export async function seedPc(
   zone: SeededZone,
-  opts: { pcNumber?: string; hourlyRate?: number } = {}
+  opts: { pcNumber?: string; hourlyRate?: number; category?: string } = {}
 ): Promise<{ pcId: string; clientKey: string }> {
   const pc = await PC.create({
     zoneId: new mongoose.Types.ObjectId(zone.zoneId),
     branchId: new mongoose.Types.ObjectId(zone.branchId),
     pcNumber: opts.pcNumber ?? `PC-${Math.floor(Math.random() * 900 + 100)}`,
     hourlyRate: mongoose.Types.Decimal128.fromString((opts.hourlyRate ?? zone.hourlyRate).toFixed(2)),
-    category: "standard",
+    category: opts.category ?? "standard",
     clientKey: `key-${new mongoose.Types.ObjectId()}`,
   });
   return { pcId: String(pc._id), clientKey: pc.clientKey as string };

@@ -33,6 +33,7 @@ import { crossZoneRouter } from "./modules/crosszone/crosszone.routes.js";
 import { smartSyncRouter } from "./modules/smartsync/smartsync.routes.js";
 import { migrationRouter } from "./modules/migration/migration.routes.js";
 import { devRouter } from "./modules/dev/dev.routes.js";
+import { pricingRouter } from "./modules/pricing/pricing.routes.js";
 
 // Register all models.
 import "./models/index.js";
@@ -64,6 +65,7 @@ export function createApp() {
 
   // System
   app.use("/health", healthRouter);
+  app.use("/api/pricing", pricingRouter);
   app.use("/docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
   app.get("/openapi.json", (_req, res) => res.json(openApiSpec));
 

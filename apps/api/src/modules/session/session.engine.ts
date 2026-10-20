@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import { Session } from "../../models/Session.js";
 import { PC } from "../../models/PC.js";
+import { resolveRate } from "../pricing/pricing.service.js";
 import { Booking } from "../../models/Booking.js";
 import type { PaymentSource } from "../../models/enums.js";
 import { badRequest, conflict, forbidden, notFound } from "../../common/errors.js";
@@ -50,7 +51,10 @@ export async function authorizeSession(
 
   const pc = await PC.findById(session.pcId);
   if (!pc) throw notFound("PC not found");
-  const rate = parseFloat(pc.hourlyRate.toString());
+  // Every price comes through the resolver, so a zone cannot find happy hour
+  // applied to walk-ins but not to the bookings made for the same hour.
+  const priced = await resolveRate(pc, new Date());
+  const rate = priced.rate;
 
   // Play mode: FIXED_DURATION (1h/2h/3h) charges for the block; OPEN_HOUR meters
   // per minute but needs a minimum start balance/deposit.
@@ -144,8 +148,12 @@ export async function authorizeSession(
   session.paymentSource = source;
   session.sessionMode = mode;
   session.selectedMinutes = mode === "FIXED_DURATION" ? ctx.selectedMinutes : undefined;
+  // Snapshotted on purpose: the player is quoted a price and pays that price,
+  // even if the rate changes while they are still at the machine.
   session.pricingSnapshot = {
     hourlyRate: rate,
+    baseRate: priced.baseRate,
+    rateLabel: priced.label,
     sessionMode: mode,
     selectedMinutes: mode === "FIXED_DURATION" ? ctx.selectedMinutes : null,
     minimumStartBalance: minStartAmount,
