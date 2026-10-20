@@ -19,7 +19,11 @@
 #>
 
 [CmdletBinding()]
-param([switch]$KeepFiles)
+param(
+  [switch]$KeepFiles,
+  # The account -KioskShell was applied to, so its desktop can be given back.
+  [string]$PlayerAccount
+)
 
 function Write-Step { param($m) Write-Host "  $m" -ForegroundColor Cyan }
 function Write-Ok   { param($m) Write-Host "  $m" -ForegroundColor Green }
@@ -54,11 +58,44 @@ Try-Step "Restoring the Ctrl+Alt+Del screen" {
   }
 }
 
+Try-Step "Giving back the Windows shell" {
+  # Without this the account starts SEIKA and nothing else, for ever. It is
+  # first in the list on purpose: a machine that cannot reach its own desktop
+  # is worse than one that still has a kiosk on it.
+  $accounts = @()
+  if ($PlayerAccount) { $accounts = @($PlayerAccount) }
+  else { $accounts = (Get-LocalUser | Where-Object { $_.Enabled }).Name }
+
+  foreach ($a in $accounts) {
+    $u = Get-LocalUser -Name $a -ErrorAction SilentlyContinue
+    if (-not $u) { continue }
+    $sid = $u.SID.Value
+    $hive = "Registry::HKEY_USERS\$sid"
+    $loaded = Test-Path $hive
+    if (-not $loaded) {
+      $dat = Join-Path (Join-Path $env:SystemDrive "Users\$a") "NTUSER.DAT"
+      if (-not (Test-Path $dat)) { continue }
+      reg load "HKU\$sid" "$dat" 2>$null | Out-Null
+    }
+    $winlogon = "$hive\Software\Microsoft\Windows NT\CurrentVersion\Winlogon"
+    $shell = (Get-ItemProperty -Path $winlogon -Name "Shell" -ErrorAction SilentlyContinue).Shell
+    if ($shell -and $shell -like "*SEIKA*") {
+      # Removed rather than set to explorer.exe: with no value Windows falls
+      # back to the machine default, which is what a normal account has.
+      Remove-ItemProperty -Path $winlogon -Name "Shell" -ErrorAction SilentlyContinue
+      Write-Host "    restored the desktop for $a" -ForegroundColor DarkGray
+    }
+    if (-not $loaded) { [gc]::Collect(); reg unload "HKU\$sid" 2>$null | Out-Null }
+  }
+}
+
 Try-Step "Undoing the lockdown" {
   # Everything 4b set. A kiosk that cannot be fully removed is worse than one
   # that was never installed — the machine has to come back as it was.
   foreach ($n in "NoControlPanel", "NoFind", "NoViewContextMenu",
-                 "NoTrayContextMenu", "NoSetTaskbar", "DisallowRun") {
+                 "NoTrayContextMenu", "NoSetTaskbar", "DisallowRun",
+                 "NoClose", "StartMenuLogOff", "NoFolderOptions", "NoDesktop",
+                 "NoDriveTypeAutoRun", "NoDrives", "NoViewOnDrive") {
     Remove-ItemProperty -Path $policyExplorer -Name $n -ErrorAction SilentlyContinue
   }
   foreach ($n in "DisableCMD", "DisableRegistryTools") {

@@ -569,30 +569,55 @@ function closeRunningGames(why) {
   try {
     for (const [name, v] of Object.entries(allGamePaths())) {
       const target = typeof v === "string" ? v : v?.launch;
-      const proc =
-        typeof v === "string"
-          ? (isProtocolUrl(target) ? null : path.basename(String(target)))
-          : v?.process;
-      if (proc) configured.set(name, { pid: null, process: proc });
+      const isUrl = isProtocolUrl(String(target ?? ""));
+      configured.set(name, {
+        pid: null,
+        process: typeof v === "string" ? (isUrl ? null : path.basename(String(target))) : v?.process,
+        // The folder the game lives in. This is what actually catches a
+        // cracked build: a loader starts, launches the real executable under
+        // a different name and exits, so the name we were given is not what
+        // ends up running — but it is running from the same directory.
+        dir: isUrl ? null : (typeof v === "string" ? path.dirname(String(target)) : (v?.dir ?? (v?.launch && !isProtocolUrl(v.launch) ? path.dirname(v.launch) : null))),
+      });
     }
   } catch {
     // A broken config must not stop the lock from closing what it can.
   }
 
-  const entries = [...new Map([...configured, ...running]).entries()];
+  const merged = new Map(configured);
+  for (const [k, v] of running) merged.set(k, { ...(configured.get(k) ?? {}), ...v });
+  const entries = [...merged.entries()];
   running.clear();
   if (entries.length === 0) return;
 
-  for (const [name, { pid, process: procName }] of entries) {
+  for (const [name, { pid, process: procName, dir }] of entries) {
     try {
       if (process.platform === "win32") {
         // /T takes the children too — a launcher's game is a child of the
         // launcher, and killing only the parent leaves the game on screen.
         if (pid) spawn("taskkill", ["/PID", String(pid), "/T", "/F"], { stdio: "ignore" }).unref();
         if (procName) spawn("taskkill", ["/IM", procName, "/T", "/F"], { stdio: "ignore" }).unref();
+
+        if (dir) {
+          // Kill by where it runs from, not what it is called. Matching on
+          // the image name misses a cracked game whose loader renamed it, and
+          // that is the case that leaves a player still playing after time is
+          // up. Quotes doubled for PowerShell, and the kiosk excluded so this
+          // can never take the lock screen down with it.
+          const safe = String(dir).replace(/'/g, "''");
+          spawn(
+            "powershell",
+            [
+              "-NoProfile", "-NonInteractive", "-Command",
+              `Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -like '${safe}\\*' -and $_.ProcessId -ne ${process.pid} } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }`,
+            ],
+            { stdio: "ignore", windowsHide: true }
+          ).unref();
+        }
       } else {
         if (pid) { try { process.kill(-pid, "SIGKILL"); } catch { process.kill(pid, "SIGKILL"); } }
         if (procName) spawn("pkill", ["-9", "-f", procName], { stdio: "ignore" }).unref();
+        if (dir) spawn("pkill", ["-9", "-f", String(dir)], { stdio: "ignore" }).unref();
       }
       logger(`closed ${name} (${why})`);
     } catch (err) {

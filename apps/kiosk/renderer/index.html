@@ -68,11 +68,16 @@
  * should be — on a screen a player stands in front of.
  */
 html {
-  /* Scales smoothly with width rather than jumping at breakpoints: a monitor
-     is not a phone, and a player standing in front of a 2K screen at 100%
-     Windows scaling was getting controls at half the size they should be.
-     1366 → 16px, 1920 → 22px, 2560 → 30px, 3840 → 32px (capped). */
-  font-size: clamp(16px, 1.17vw, 32px);
+  /*
+   * The launcher is laid out as if the screen were 1200px wide, then scaled
+   * up to fill whatever it is actually on. One rule instead of breakpoints:
+   * the same design at every resolution, just bigger.
+   *
+   * 16px root at 1200 wide, so 100vw / 1200 * 16px = 1.3333vw. A 2560 monitor
+   * gets 34px and everything with it; a 1366 laptop gets 18px. Floored at
+   * 15px so a small window stays legible rather than collapsing.
+   */
+  font-size: max(15px, 1.3333vw);
   background: var(--s0);
 }
 

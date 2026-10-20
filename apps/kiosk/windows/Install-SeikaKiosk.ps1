@@ -63,7 +63,19 @@ param(
   [switch]$LockCtrlAltDel,
 
   # Skip the lockdown policies entirely (leaves only the kiosk app itself).
-  [switch]$NoHarden
+  [switch]$NoHarden,
+
+  # Replace the Windows shell with SEIKA for the player account: no desktop,
+  # no taskbar, no Explorer at all. This is what "the desktop is cut off"
+  # actually requires — policies only hide things that are still running.
+  #
+  # Read §SHELL at the end before using it. If SEIKA will not start, that
+  # account has no shell, and the way back is another account or Safe Mode.
+  [switch]$KioskShell,
+
+  # The account the player signs in as. Needed for -KioskShell, because the
+  # shell is per-user and setting it machine-wide would lock staff out too.
+  [string]$PlayerAccount
 )
 
 $ErrorActionPreference = "Stop"
@@ -272,11 +284,66 @@ if (-not $NoHarden) {
   Set-ItemProperty -Path $storage -Name "WriteProtect" -Value 1 -Type DWord
   Write-Ok "USB storage is read-only"
 
+  # Nothing that ends the session from the inside: no sign out, no shutdown
+  # menu, no lock. A player who can log off is a player who can reach another
+  # account, and a PC that can be restarted mid-session is a session nobody
+  # can account for.
+  Set-ItemProperty -Path $policyExplorer -Name "NoClose"              -Value 1 -Type DWord
+  Set-ItemProperty -Path $policyExplorer -Name "NoLogoff"             -Value 1 -Type DWord
+  Set-ItemProperty -Path $policyExplorer -Name "StartMenuLogOff"      -Value 1 -Type DWord
+  Set-ItemProperty -Path $policyExplorer -Name "NoFolderOptions"      -Value 1 -Type DWord
+  Set-ItemProperty -Path $policyExplorer -Name "NoDesktop"            -Value 1 -Type DWord
+  Set-ItemProperty -Path $policyExplorer -Name "NoDriveTypeAutoRun"   -Value 255 -Type DWord
+  # Every drive hidden in Explorer: 0x3FFFFFF is A through Z.
+  Set-ItemProperty -Path $policyExplorer -Name "NoDrives"             -Value 67108863 -Type DWord
+  Set-ItemProperty -Path $policyExplorer -Name "NoViewOnDrive"        -Value 67108863 -Type DWord
+  Write-Ok "sign out, shutdown, desktop and drives closed off"
+
   # No installing anything, for anyone who is not an administrator.
   $installer = "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Installer"
   New-Item -Path $installer -Force | Out-Null
   Set-ItemProperty -Path $installer -Name "DisableMSI" -Value 2 -Type DWord
   Write-Ok "installers blocked for non-administrators"
+}
+
+# ─── 4c. Shell replacement ───────────────────────────────────────────────────
+#
+# Policies hide the desktop. This removes it: Windows starts SEIKA instead of
+# explorer.exe for that account, so there is no taskbar, no Start menu, no
+# file manager and nothing behind the kiosk to alt-tab to.
+#
+# Per-user, not machine-wide: staff and administrators keep a normal desktop
+# on their own accounts, which is also the way back if this goes wrong.
+
+if ($KioskShell) {
+  if (-not $PlayerAccount) {
+    throw "-KioskShell needs -PlayerAccount <name>: the shell is set per user, and setting it for everyone would lock staff out too."
+  }
+
+  $acct = Get-LocalUser -Name $PlayerAccount -ErrorAction SilentlyContinue
+  if (-not $acct) { throw "No local account called '$PlayerAccount'." }
+
+  Write-Step "Making SEIKA the shell for $PlayerAccount"
+
+  # Written under that user's own hive, which has to be loaded if they are
+  # not signed in — HKU\<SID> only exists while a session is open.
+  $sid = $acct.SID.Value
+  $hive = "Registry::HKEY_USERS\$sid"
+  $loaded = Test-Path $hive
+  if (-not $loaded) {
+    $dat = Join-Path (Join-Path $env:SystemDrive "Users\$PlayerAccount") "NTUSER.DAT"
+    if (-not (Test-Path $dat)) {
+      throw "Cannot reach $PlayerAccount's registry. Sign in as that account once, sign out, then run this again."
+    }
+    reg load "HKU\$sid" "$dat" | Out-Null
+  }
+
+  $winlogon = "$hive\Software\Microsoft\Windows NT\CurrentVersion\Winlogon"
+  New-Item -Path $winlogon -Force | Out-Null
+  Set-ItemProperty -Path $winlogon -Name "Shell" -Value $exe -Type String
+
+  if (-not $loaded) { [gc]::Collect(); reg unload "HKU\$sid" | Out-Null }
+  Write-Ok "SEIKA is the shell — that account has no desktop to return to"
 }
 
 # ─── 5. Watchdog ─────────────────────────────────────────────────────────────
@@ -355,6 +422,22 @@ if ($playerLooksAdmin) {
   Write-Host "      Remove-LocalGroupMember -Group Administrators -Member '<name>'" -ForegroundColor DarkGray
 } else {
   Write-Ok "no extra administrator accounts found"
+}
+
+if ($KioskShell) {
+  Write-Host ""
+  Write-Host "  SHELL — read this before you walk away" -ForegroundColor Yellow
+  Write-Host "    $PlayerAccount has no desktop now. If SEIKA does not start," -ForegroundColor Yellow
+  Write-Host "    that account has nothing at all: no taskbar, no Explorer, no" -ForegroundColor Yellow
+  Write-Host "    way to launch anything." -ForegroundColor Yellow
+  Write-Host ""
+  Write-Host "    Test it before the PC goes on the floor: sign in as" -ForegroundColor Yellow
+  Write-Host "    $PlayerAccount and confirm SEIKA comes up." -ForegroundColor Yellow
+  Write-Host ""
+  Write-Host "    The way back is an administrator account, which still has a" -ForegroundColor DarkGray
+  Write-Host "    normal desktop, or Safe Mode. Then:" -ForegroundColor DarkGray
+  Write-Host "      Uninstall-SeikaKiosk.ps1 -PlayerAccount $PlayerAccount" -ForegroundColor DarkGray
+  Write-Host ""
 }
 
 Write-Host ""
